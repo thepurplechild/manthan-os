@@ -1,5 +1,8 @@
 "use client";
 export const dynamic = "force-dynamic";
+export default function Guided() {
+  return <main className="p-6">Guided – coming soon</main>;
+}
 
 
 import { useState } from "react";
