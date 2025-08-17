@@ -1,5 +1,6 @@
 "use client";
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 import { useState } from "react";
 import { api } from "../../src/lib/api";
@@ -7,7 +8,6 @@ import { api } from "../../src/lib/api";
 export default function Accelerated() {
   const [language, setLanguage] = useState("en");
   const [busy, setBusy] = useState(false);
-
   const [extracted, setExtracted] = useState("");
   const [deck, setDeck] = useState<any>(null);
 
@@ -40,7 +40,7 @@ export default function Accelerated() {
         language
       };
       const r = await api.post("/gen/deck", payload);
-      setDeck(r.data.deck || { raw: "No deck data" });
+      setDeck(r.data?.deck || { raw: "No deck data" });
     } finally {
       setBusy(false);
     }
@@ -68,15 +68,13 @@ export default function Accelerated() {
           <option value="bn">Bengali</option><option value="mr">Marathi</option>
         </select>
 
-        <input type="file" accept=".txt,.md,.docx,.pdf" onChange={onUpload}
-               className="block text-sm" />
+        <input type="file" accept=".txt,.md,.docx,.pdf" onChange={onUpload} className="block text-sm" />
         {busy && <span className="text-sm text-gray-400">Working…</span>}
       </div>
 
       <div className="grid gap-3">
         <label className="text-sm text-gray-400">Extracted summary / fields</label>
-        <textarea rows={10} value={extracted} onChange={e=>setExtracted(e.target.value)}
-                  className="bg-white/5 rounded p-3" />
+        <textarea rows={10} value={extracted} onChange={e=>setExtracted(e.target.value)} className="bg-white/5 rounded p-3" />
       </div>
 
       <div className="flex gap-2">
