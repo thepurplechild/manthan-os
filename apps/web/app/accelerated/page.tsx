@@ -1,5 +1,8 @@
 "use client";
 export const dynamic = "force-dynamic";
+export default function Accelerated() {
+  return <main className="p-6">Accelerated – coming soon</main>;
+}
 
 
 import { useState } from "react";
