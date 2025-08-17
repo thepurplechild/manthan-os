@@ -12,6 +12,7 @@ from docx import Document
 
 load_dotenv()
 
+# --- Core Config ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-5")
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "project-manthan-468609")
@@ -21,6 +22,17 @@ ENABLE_IMAGE_GEN = os.getenv("ENABLE_IMAGE_GEN", "false").lower() == "true"
 
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "http://localhost:3000")
 
+# --- Firebase Env (public-safe only) ---
+FIREBASE_RUNTIME = {
+    "FIREBASE_API_KEY": os.getenv("NEXT_PUBLIC_FIREBASE_API_KEY", ""),
+    "FIREBASE_AUTH_DOMAIN": os.getenv("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN", ""),
+    "FIREBASE_PROJECT_ID": os.getenv("NEXT_PUBLIC_FIREBASE_PROJECT_ID", ""),
+    "FIREBASE_APP_ID": os.getenv("NEXT_PUBLIC_FIREBASE_APP_ID", ""),
+    "FIREBASE_STORAGE_BUCKET": os.getenv("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET", ""),
+    "FIREBASE_MESSAGING_SENDER_ID": os.getenv("NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID", ""),
+}
+
+# --- App ---
 app = FastAPI(title="Manthan Creator Suite API", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
@@ -30,7 +42,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Clients (lazy load on demand)
+# --- Clients (lazy) ---
 def _openai_headers():
     return {"Authorization": f"Bearer {OPENAI_API_KEY}"}
 
@@ -40,7 +52,7 @@ def _firestore():
 def _storage():
     return storage.Client(project=PROJECT_ID)
 
-# -------- Schemas --------
+# --- Schemas ---
 class IdeaReq(BaseModel):
     genre: str
     tone: str
@@ -72,7 +84,7 @@ class ExportReq(BaseModel):
     deck_json: Dict[str, Any]
     format: str  # pdf | docx
 
-# -------- Helpers --------
+# --- Helpers ---
 async def call_llm(system_prompt: str, user_prompt: str):
     if not OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY missing")
@@ -83,7 +95,6 @@ async def call_llm(system_prompt: str, user_prompt: str):
             {"role": "user", "content": user_prompt}
         ]
     }
-    # NOTE: Endpoint path is illustrative; adjust to actual GPT-5 API path
     url = "https://api.openai.com/v1/chat/completions"
     async with httpx.AsyncClient(timeout=120) as client:
         r = await client.post(url, headers=_openai_headers(), json=payload)
@@ -123,10 +134,15 @@ def upload_bytes(path: str, data: bytes, content_type: str) -> str:
     blob.make_public()
     return blob.public_url
 
-# -------- Routes --------
+# --- Routes ---
 @app.get("/health")
 def health():
     return {"status": "ok", "version": "0.2.0"}
+
+@app.get("/runtime-env")
+def runtime_env():
+    """Return only the safe Firebase env vars to the frontend."""
+    return FIREBASE_RUNTIME
 
 @app.post("/gen/idea")
 async def gen_idea(req: IdeaReq):
@@ -154,7 +170,6 @@ async def gen_deck(req: DeckReq):
     sys = "You are a pitch-deck producer for film/series. Create structured JSON with slides: Title, Logline, Synopsis, Characters, World, Toneboard, Comparables, CTA."
     user = json.dumps(req.model_dump(), ensure_ascii=False)
     content = await call_llm(sys, user)
-    # content may be text; try to coerce to JSON
     try:
         deck = json.loads(content)
     except Exception:
@@ -163,7 +178,6 @@ async def gen_deck(req: DeckReq):
 
 @app.post("/ingest/upload")
 async def ingest_upload(file: UploadFile = File(...), language: str = Form("en")):
-    # Minimal: read text; in production use proper parsers
     text = (await file.read()).decode(errors="ignore")
     sys = "You are a development exec. From the uploaded script text, extract: title, logline, synopsis, characters, world, themes, and comparables."
     user = f"Language: {language}\nTEXT:\n{text[:15000]}"
@@ -181,7 +195,10 @@ async def export(req: ExportReq):
         return {"url": url}
     elif req.format == "docx":
         data = save_docx_from_text(title, text)
-        url = upload_bytes(f"exports/{title}.docx", data, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        url = upload_bytes(
+            f"exports/{title}.docx", data,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
         return {"url": url}
     else:
         return {"error": "unsupported format"}
@@ -190,6 +207,5 @@ async def export(req: ExportReq):
 async def concepts(prompt: str = Form(...)):
     if not ENABLE_IMAGE_GEN:
         return {"enabled": False}
-    # Placeholder: call an image endpoint if available
-    # Here we just echo back a hypothetical URL path
     return {"enabled": True, "images": [f"https://storage.googleapis.com/{BUCKET_NAME}/concepts/sample1.png"]}
+
