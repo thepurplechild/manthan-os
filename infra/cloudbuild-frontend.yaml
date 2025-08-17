@@ -1,4 +1,4 @@
-# cloudbuild-frontend.yaml
+# infra/cloudbuild-frontend.yaml
 options:
   logging: CLOUD_LOGGING_ONLY
 
@@ -24,7 +24,7 @@ steps:
     - apps/web/Dockerfile
     - -t
     - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
-    - apps/web
+    - .
 
 - name: gcr.io/cloud-builders/docker
   args:
@@ -52,3 +52,4 @@ steps:
     - --set-env-vars=NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
     - --cpu=1
     - --memory=512Mi
+
