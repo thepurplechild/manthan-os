@@ -12,8 +12,9 @@ import {
   signOut as fbSignOut,
   type Auth,
 } from "firebase/auth";
+import { getFirestore, type Firestore } from "firebase/firestore";
 
-/** Values come from Cloud Run env via /api/runtime-env */
+/** Values come from Cloud Run env via /api/runtime-env (frontend route) */
 type RuntimeEnv = {
   FIREBASE_API_KEY: string;
   FIREBASE_AUTH_DOMAIN: string;
@@ -23,18 +24,18 @@ type RuntimeEnv = {
   FIREBASE_MESSAGING_SENDER_ID: string;
 };
 
-let cfgPromise: Promise<RuntimeEnv | null> | null = null;
+let envPromise: Promise<RuntimeEnv | null> | null = null;
 
 /** Fetch public-safe env at RUNTIME (no rebuild needed for key changes) */
 async function loadRuntimeEnv(): Promise<RuntimeEnv | null> {
-  if (cfgPromise) return cfgPromise;
-  cfgPromise = (async () => {
+  if (envPromise) return envPromise;
+  envPromise = (async () => {
     try {
       if (typeof window === "undefined") return null; // don't fetch during SSR
       const res = await fetch("/api/runtime-env", { cache: "no-store" });
       if (!res.ok) return null;
       const d = (await res.json()) as RuntimeEnv;
-      // Minimal validation
+      // minimal validation
       if (!d.FIREBASE_API_KEY || !d.FIREBASE_AUTH_DOMAIN || !d.FIREBASE_PROJECT_ID || !d.FIREBASE_APP_ID) {
         return null;
       }
@@ -43,7 +44,7 @@ async function loadRuntimeEnv(): Promise<RuntimeEnv | null> {
       return null;
     }
   })();
-  return cfgPromise;
+  return envPromise;
 }
 
 /** Initialize Firebase ONLY in the browser and ONLY once we have keys */
@@ -61,12 +62,18 @@ function ensureApp(env: RuntimeEnv | null): FirebaseApp | null {
   return apps.length ? apps[0] : initializeApp(config);
 }
 
-/** Public helpers */
+/** ---------- Public helpers ---------- */
 
 export async function getAuthIfReady(): Promise<Auth | null> {
   const env = await loadRuntimeEnv();
   const app = ensureApp(env);
   return app ? getAuth(app) : null;
+}
+
+export async function getFirestoreIfReady(): Promise<Firestore | null> {
+  const env = await loadRuntimeEnv();
+  const app = ensureApp(env);
+  return app ? getFirestore(app) : null;
 }
 
 export async function signInWithGoogle(): Promise<void> {
@@ -105,5 +112,6 @@ export async function signOut(): Promise<void> {
   if (!auth) return;
   await fbSignOut(auth);
 }
+
 
 
