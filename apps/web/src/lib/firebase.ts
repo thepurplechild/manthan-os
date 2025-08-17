@@ -1,49 +1,82 @@
+// apps/web/src/lib/firebase.ts
 "use client";
 
-import { initializeApp, getApps } from "firebase/app";
+import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup,
-  sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
+  signOut as fbSignOut,
+  type Auth,
 } from "firebase/auth";
 
-let cachedCfg: any | null = null;
+/** Values come from Cloud Run env via /api/runtime-env */
+type RuntimeEnv = {
+  FIREBASE_API_KEY: string;
+  FIREBASE_AUTH_DOMAIN: string;
+  FIREBASE_PROJECT_ID: string;
+  FIREBASE_APP_ID: string;
+  FIREBASE_STORAGE_BUCKET: string;
+  FIREBASE_MESSAGING_SENDER_ID: string;
+};
 
-async function loadRuntimeConfig() {
-  if (cachedCfg) return cachedCfg;
-  const res = await fetch("/api/runtime-env", { cache: "no-store" });
-  const d = await res.json();
-  cachedCfg = {
-    apiKey: d.FIREBASE_API_KEY,
-    authDomain: d.FIREBASE_AUTH_DOMAIN,
-    projectId: d.FIREBASE_PROJECT_ID,
-    appId: d.FIREBASE_APP_ID,
-    storageBucket: d.FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: d.FIREBASE_MESSAGING_SENDER_ID,
+let cfgPromise: Promise<RuntimeEnv | null> | null = null;
+
+/** Fetch public-safe env at RUNTIME (no rebuild needed for key changes) */
+async function loadRuntimeEnv(): Promise<RuntimeEnv | null> {
+  if (cfgPromise) return cfgPromise;
+  cfgPromise = (async () => {
+    try {
+      if (typeof window === "undefined") return null; // don't fetch during SSR
+      const res = await fetch("/api/runtime-env", { cache: "no-store" });
+      if (!res.ok) return null;
+      const d = (await res.json()) as RuntimeEnv;
+      // Minimal validation
+      if (!d.FIREBASE_API_KEY || !d.FIREBASE_AUTH_DOMAIN || !d.FIREBASE_PROJECT_ID || !d.FIREBASE_APP_ID) {
+        return null;
+      }
+      return d;
+    } catch {
+      return null;
+    }
+  })();
+  return cfgPromise;
+}
+
+/** Initialize Firebase ONLY in the browser and ONLY once we have keys */
+function ensureApp(env: RuntimeEnv | null): FirebaseApp | null {
+  if (typeof window === "undefined" || !env) return null;
+  const config = {
+    apiKey: env.FIREBASE_API_KEY,
+    authDomain: env.FIREBASE_AUTH_DOMAIN,
+    projectId: env.FIREBASE_PROJECT_ID,
+    appId: env.FIREBASE_APP_ID,
+    storageBucket: env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: env.FIREBASE_MESSAGING_SENDER_ID,
   };
-  return cachedCfg;
+  const apps = getApps();
+  return apps.length ? apps[0] : initializeApp(config);
 }
 
-function ensureAppSync(cfg: any) {
-  if (typeof window === "undefined") return null;
-  if (!cfg?.apiKey || !cfg?.authDomain || !cfg?.projectId || !cfg?.appId) return null;
-  const app = getApps().length ? getApps()[0] : initializeApp(cfg);
-  return app;
-}
+/** Public helpers */
 
-export async function getAuthIfReady() {
-  const cfg = await loadRuntimeConfig();
-  const app = ensureAppSync(cfg);
+export async function getAuthIfReady(): Promise<Auth | null> {
+  const env = await loadRuntimeEnv();
+  const app = ensureApp(env);
   return app ? getAuth(app) : null;
 }
 
-export async function signInWithGoogle() {
+export async function signInWithGoogle(): Promise<void> {
   const auth = await getAuthIfReady();
   if (!auth) throw new Error("Firebase not configured yet.");
   const provider = new GoogleAuthProvider();
   await signInWithPopup(auth, provider);
 }
 
-export async function sendEmailLink(email: string) {
+export async function sendEmailLink(email: string): Promise<void> {
   const auth = await getAuthIfReady();
   if (!auth) throw new Error("Firebase not configured yet.");
   const actionCodeSettings = {
@@ -51,18 +84,26 @@ export async function sendEmailLink(email: string) {
     handleCodeInApp: true,
   };
   await sendSignInLinkToEmail(auth, email, actionCodeSettings);
-  window.localStorage.setItem("emailForSignIn", email);
+  if (typeof window !== "undefined") window.localStorage.setItem("emailForSignIn", email);
 }
 
-export async function completeEmailLink() {
+export async function completeEmailLink(): Promise<void> {
   if (typeof window === "undefined") return;
   const auth = await getAuthIfReady();
   if (!auth) return;
   if (isSignInWithEmailLink(auth, window.location.href)) {
-    let email = window.localStorage.getItem("emailForSignIn") || window.prompt("Confirm your email") || "";
+    let email = window.localStorage.getItem("emailForSignIn");
+    if (!email) email = window.prompt("Confirm your email") || "";
     if (!email) return;
     await signInWithEmailLink(auth, email, window.location.href);
     window.localStorage.removeItem("emailForSignIn");
   }
 }
+
+export async function signOut(): Promise<void> {
+  const auth = await getAuthIfReady();
+  if (!auth) return;
+  await fbSignOut(auth);
+}
+
 
