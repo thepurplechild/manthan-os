@@ -1,52 +1,67 @@
-# Manthan — Backend: Cloud Build → Cloud Run (asia-south1)
-# Builds Dockerfile.backend, pushes to Artifact Registry, deploys to Cloud Run.
-# Logs go to Cloud Logging only (no GCS bucket needed).
-
-# 🔐 Secrets expected:
-#   OPENAI_API_KEY  (Secret Manager, latest version)
+# Manthan — Backend (auto-detect Dockerfile)
+# Builds FastAPI image, pushes to Artifact Registry, deploys to Cloud Run.
 
 substitutions:
-  # Safe defaults (triggers can override). Change only if your project/repo names differ.
   _REGION: asia-south1
   _PROJECT: project-manthan-468609
-  _REPO: manthan              # Artifact Registry repository name
-  _SERVICE: manthan-backend   # Cloud Run service name
+  _REPO: manthan
+  _SERVICE: manthan-backend
 
-  # Backend runtime env (non-secrets). You can override these in Trigger → Substitutions.
-  _ALLOWED_ORIGIN: ""         # e.g. https://manthan-frontend-xxxx-asia-south1.run.app
+  # Backend runtime env (can override in Trigger UI)
+  _ALLOWED_ORIGIN: ""            # e.g. https://manthan-frontend-xxxx-asia-south1.run.app
   _MODEL_NAME: gpt-5
   _GCS_BUCKET: manthan-assets
   _FIRESTORE_NAMESPACE: prod
   _ENABLE_IMAGE_GEN: "false"
 
+# One of these must exist in your repo:
+#   Dockerfile.backend
+#   apps/api/Dockerfile.backend
+#   apps/api/Dockerfile
+#   Dockerfile
 steps:
-  # (Optional) Echo the final image tag (helps debug if anything is blank)
+  # Detect Dockerfile path for backend and store to a file
   - name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
     args:
       - -lc
       - |
+        set -euo pipefail
+        DF=""
+        for CAND in \
+          "Dockerfile.backend" \
+          "apps/api/Dockerfile.backend" \
+          "apps/api/Dockerfile" \
+          "Dockerfile"
+        do
+          if [[ -f "$CAND" ]]; then DF="$CAND"; break; fi
+        done
+        if [[ -z "$DF" ]]; then
+          echo "ERROR: No backend Dockerfile found. Expected one of: Dockerfile.backend, apps/api/Dockerfile.backend, apps/api/Dockerfile, Dockerfile"
+          exit 1
+        fi
+        echo "Using backend Dockerfile: $DF"
+        echo -n "$DF" > .df_backend
         echo "IMAGE=${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}"
 
-  # Build image
+  # Build
+  - name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -lc
+      - |
+        DF="$(cat .df_backend)"
+        docker build \
+          -t "${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}" \
+          -f "$DF" .
+
+  # Push
   - name: gcr.io/cloud-builders/docker
     args:
-      [
-        "build",
-        "-t","${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}",
-        "-f","Dockerfile.backend",
-        "."
-      ]
+      - push
+      - ${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
 
-  # Push image
-  - name: gcr.io/cloud-builders/docker
-    args:
-      [
-        "push",
-        "${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}"
-      ]
-
-  # Deploy to Cloud Run (pass env vars every time)
+  # Deploy to Cloud Run (always pass env + secret)
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
@@ -67,9 +82,8 @@ steps:
 images:
   - ${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
 
-# Required when your trigger has a custom service account
 options:
   logging: CLOUD_LOGGING_ONLY
 
-# Optional: increase build timeout if your image is large
 timeout: "1200s"
+
