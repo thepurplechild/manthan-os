@@ -9,10 +9,13 @@ COPY apps ./apps
 COPY packages ./packages
 
 RUN npm i -g pnpm && pnpm i --frozen-lockfile || pnpm i
+
 WORKDIR /app/apps/web
 RUN pnpm build
 
-ENV PORT=3000
-EXPOSE 3000
-CMD ["pnpm", "start"]
+# Do NOT set ENV PORT here; Cloud Run provides it
+# Do NOT EXPOSE a fixed port; not required for Cloud Run
+
+CMD ["sh", "-c", "pnpm start"]
+
 
