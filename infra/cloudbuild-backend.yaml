@@ -1,28 +1,75 @@
+# Manthan — Backend: Cloud Build → Cloud Run (asia-south1)
+# Builds Dockerfile.backend, pushes to Artifact Registry, deploys to Cloud Run.
+# Logs go to Cloud Logging only (no GCS bucket needed).
+
+# 🔐 Secrets expected:
+#   OPENAI_API_KEY  (Secret Manager, latest version)
+
+substitutions:
+  # Safe defaults (triggers can override). Change only if your project/repo names differ.
+  _REGION: asia-south1
+  _PROJECT: project-manthan-468609
+  _REPO: manthan              # Artifact Registry repository name
+  _SERVICE: manthan-backend   # Cloud Run service name
+
+  # Backend runtime env (non-secrets). You can override these in Trigger → Substitutions.
+  _ALLOWED_ORIGIN: ""         # e.g. https://manthan-frontend-xxxx-asia-south1.run.app
+  _MODEL_NAME: gpt-5
+  _GCS_BUCKET: manthan-assets
+  _FIRESTORE_NAMESPACE: prod
+  _ENABLE_IMAGE_GEN: "false"
+
 steps:
+  # (Optional) Echo the final image tag (helps debug if anything is blank)
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -lc
+      - |
+        echo "IMAGE=${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}"
+
+  # Build image
   - name: gcr.io/cloud-builders/docker
-    args: [
-      "build",
-      "-t","${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}",
-      "-f","Dockerfile.backend","."
-    ]
+    args:
+      [
+        "build",
+        "-t","${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}",
+        "-f","Dockerfile.backend",
+        "."
+      ]
+
+  # Push image
   - name: gcr.io/cloud-builders/docker
-    args: ["push","${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}"]
+    args:
+      [
+        "push",
+        "${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}"
+      ]
+
+  # Deploy to Cloud Run (pass env vars every time)
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
-    args: [
-      "run","deploy","${_SERVICE}",
-      "--image","${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}",
-      "--region","${_REGION}",
-      "--platform","managed",
-      "--allow-unauthenticated",
-      "--set-env-vars",
-      "ALLOWED_ORIGIN=${_ALLOWED_ORIGIN},MODEL_NAME=${_MODEL_NAME},GCP_PROJECT_ID=${_PROJECT},GCS_BUCKET=${_GCS_BUCKET},FIRESTORE_NAMESPACE=${_FIRESTORE_NAMESPACE},ENABLE_IMAGE_GEN=${_ENABLE_IMAGE_GEN}",
-      "--update-secrets","OPENAI_API_KEY=OPENAI_API_KEY:latest"
-    ]
+    args:
+      [
+        "run","deploy","${_SERVICE}",
+        "--image","${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}",
+        "--region","${_REGION}",
+        "--platform","managed",
+        "--allow-unauthenticated",
+        "--memory","1Gi",
+        "--cpu","1",
+        "--timeout","300",
+        "--set-env-vars",
+        "ALLOWED_ORIGIN=${_ALLOWED_ORIGIN},MODEL_NAME=${_MODEL_NAME},GCP_PROJECT_ID=${_PROJECT},GCS_BUCKET=${_GCS_BUCKET},FIRESTORE_NAMESPACE=${_FIRESTORE_NAMESPACE},ENABLE_IMAGE_GEN=${_ENABLE_IMAGE_GEN}",
+        "--update-secrets","OPENAI_API_KEY=OPENAI_API_KEY:latest"
+      ]
+
 images:
   - ${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
+
+# Required when your trigger has a custom service account
 options:
   logging: CLOUD_LOGGING_ONLY
 
-
-
+# Optional: increase build timeout if your image is large
+timeout: "1200s"
