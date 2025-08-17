@@ -1,11 +1,10 @@
 "use client";
 export const dynamic = "force-dynamic";
+
 import { useEffect } from "react";
 import Link from "next/link";
 import { completeEmailLink, sendEmailLink, signInWithGoogle } from "../src/lib/firebase";
 import { useAuth } from "../src/components/AuthProvider";
-
-export const dynamic = "force-dynamic";
 
 export default function Home() {
   const { user } = useAuth();
