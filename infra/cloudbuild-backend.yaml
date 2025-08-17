@@ -6,33 +6,39 @@ substitutions:
   _REGION: asia-south1
   _REPO: manthan-repo
   _SERVICE: manthan-backend
-  _ALLOWED_ORIGIN: https://manthan-frontend-$_REGION.run.app
-  _PROJECT: project-manthan-468609
-  _IMAGE: $_REGION-docker.pkg.dev/$_PROJECT/$_REPO/$_SERVICE:$COMMIT_SHA
 
 steps:
 - name: gcr.io/cloud-builders/docker
-  args: ["build", "-f", "apps/api/Dockerfile", "-t", "$_IMAGE", "apps/api"]
+  args:
+    - build
+    - -f
+    - apps/api/Dockerfile
+    - -t
+    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
+    - apps/api
 
 - name: gcr.io/cloud-builders/docker
-  args: ["push", "$_IMAGE"]
+  args:
+    - push
+    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
 
 - name: gcr.io/google.com/cloudsdktool/cloud-sdk
   entrypoint: gcloud
   args:
     - run
     - deploy
-    - $_SERVICE
-    - --image=$_IMAGE
-    - --region=$_REGION
-    - --project=$_PROJECT
+    - ${_SERVICE}
+    - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
+    - --region=${_REGION}
+    - --project=${PROJECT_ID}
     - --allow-unauthenticated
-    - --set-env-vars=ALLOWED_ORIGIN=$_ALLOWED_ORIGIN
+    - --set-env-vars=ALLOWED_ORIGIN=https://manthan-frontend-${_REGION}.run.app
     - --set-env-vars=MODEL_NAME=gpt-5
-    - --set-env-vars=GCP_PROJECT_ID=$_PROJECT
+    - --set-env-vars=GCP_PROJECT_ID=${PROJECT_ID}
     - --set-env-vars=GCS_BUCKET=manthan-assets
     - --set-env-vars=FIRESTORE_NAMESPACE=prod
     - --set-env-vars=ENABLE_IMAGE_GEN=false
-    - --update-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest
+    - --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest
     - --cpu=1
     - --memory=512Mi
+
