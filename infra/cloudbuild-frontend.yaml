@@ -9,14 +9,6 @@ substitutions:
   _API_BASE: https://manthan-backend-${_REGION}.run.app
 
 steps:
-- name: gcr.io/cloud-builders/npm
-  dir: apps/web
-  args: ["npm", "i", "-g", "pnpm"]
-
-- name: gcr.io/cloud-builders/npm
-  dir: .
-  args: ["pnpm", "i"]
-
 - name: gcr.io/cloud-builders/docker
   args:
     - build
@@ -52,4 +44,5 @@ steps:
     - --set-env-vars=NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
     - --cpu=1
     - --memory=512Mi
+
 
