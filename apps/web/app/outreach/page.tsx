@@ -1,5 +1,8 @@
 "use client";
 export const dynamic = "force-dynamic";
+export default function Outreach() {
+  return <main className="p-6">Outreach – coming soon</main>;
+}
 
 import { useState } from "react";
 import { collection, addDoc, getDocs, getFirestore } from "firebase/firestore";
