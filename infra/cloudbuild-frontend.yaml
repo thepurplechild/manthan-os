@@ -1,24 +1,73 @@
+# Manthan — Frontend: Cloud Build → Cloud Run (asia-south1)
+# Builds Dockerfile.frontend, pushes to Artifact Registry, deploys to Cloud Run.
+# Logs go to Cloud Logging only (no GCS bucket needed).
+
+substitutions:
+  # Safe defaults (triggers can override).
+  _REGION: asia-south1
+  _PROJECT: project-manthan-468609
+  _REPO: manthan               # Artifact Registry repository name
+  _SERVICE: manthan-frontend   # Cloud Run service name
+
+  # Frontend runtime env (public-safe; consumed by /api/runtime-env)
+  _BACKEND_BASE_URL: ""        # e.g. https://manthan-backend-xxxx-asia-south1.run.app
+  _FIREBASE_API_KEY: ""
+  _FIREBASE_AUTH_DOMAIN: ""
+  _FIREBASE_PROJECT_ID: ""
+  _FIREBASE_APP_ID: ""
+  _FIREBASE_STORAGE_BUCKET: ""
+  _FIREBASE_MESSAGING_SENDER_ID: ""
+  _POSTHOG_KEY: ""             # optional
+
 steps:
+  # (Optional) Echo the final image tag (helps debug)
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -lc
+      - |
+        echo "IMAGE=${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}"
+
+  # Build image
   - name: gcr.io/cloud-builders/docker
-    args: [
-      "build",
-      "-t","${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}",
-      "-f","Dockerfile.frontend","."
-    ]
+    args:
+      [
+        "build",
+        "-t","${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}",
+        "-f","Dockerfile.frontend",
+        "."
+      ]
+
+  # Push image
   - name: gcr.io/cloud-builders/docker
-    args: ["push","${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}"]
+    args:
+      [
+        "push",
+        "${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}"
+      ]
+
+  # Deploy to Cloud Run (pass env vars every time)
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
-    args: [
-      "run","deploy","${_SERVICE}",
-      "--image","${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}",
-      "--region","${_REGION}",
-      "--platform","managed",
-      "--allow-unauthenticated",
-      "--set-env-vars",
-      "BACKEND_BASE_URL=${_BACKEND_BASE_URL},FIREBASE_API_KEY=${_FIREBASE_API_KEY},FIREBASE_AUTH_DOMAIN=${_FIREBASE_AUTH_DOMAIN},FIREBASE_PROJECT_ID=${_FIREBASE_PROJECT_ID},FIREBASE_APP_ID=${_FIREBASE_APP_ID},FIREBASE_STORAGE_BUCKET=${_FIREBASE_STORAGE_BUCKET},FIREBASE_MESSAGING_SENDER_ID=${_FIREBASE_MESSAGING_SENDER_ID},POSTHOG_KEY=${_POSTHOG_KEY}"
-    ]
+    args:
+      [
+        "run","deploy","${_SERVICE}",
+        "--image","${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}",
+        "--region","${_REGION}",
+        "--platform","managed",
+        "--allow-unauthenticated",
+        "--memory","1Gi",
+        "--cpu","1",
+        "--timeout","300",
+        "--set-env-vars",
+        "BACKEND_BASE_URL=${_BACKEND_BASE_URL},FIREBASE_API_KEY=${_FIREBASE_API_KEY},FIREBASE_AUTH_DOMAIN=${_FIREBASE_AUTH_DOMAIN},FIREBASE_PROJECT_ID=${_FIREBASE_PROJECT_ID},FIREBASE_APP_ID=${_FIREBASE_APP_ID},FIREBASE_STORAGE_BUCKET=${_FIREBASE_STORAGE_BUCKET},FIREBASE_MESSAGING_SENDER_ID=${_FIREBASE_MESSAGING_SENDER_ID},POSTHOG_KEY=${_POSTHOG_KEY}"
+      ]
+
 images:
   - ${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
+
 options:
   logging: CLOUD_LOGGING_ONLY
+
+timeout: "1200s"
+
