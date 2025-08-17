@@ -1,43 +1,28 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: [
+      "build",
+      "-t","${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}",
+      "-f","Dockerfile.backend","."
+    ]
+  - name: gcr.io/cloud-builders/docker
+    args: ["push","${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}"]
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args: [
+      "run","deploy","${_SERVICE}",
+      "--image","${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}",
+      "--region","${_REGION}",
+      "--platform","managed",
+      "--allow-unauthenticated",
+      "--set-env-vars",
+      "ALLOWED_ORIGIN=${_ALLOWED_ORIGIN},MODEL_NAME=${_MODEL_NAME},GCP_PROJECT_ID=${_PROJECT},GCS_BUCKET=${_GCS_BUCKET},FIRESTORE_NAMESPACE=${_FIRESTORE_NAMESPACE},ENABLE_IMAGE_GEN=${_ENABLE_IMAGE_GEN}",
+      "--update-secrets","OPENAI_API_KEY=OPENAI_API_KEY:latest"
+    ]
+images:
+  - ${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
 options:
   logging: CLOUD_LOGGING_ONLY
-
-substitutions:
-  _REGION: asia-south1
-  _REPO: manthan-repo
-  _SERVICE: manthan-backend
-
-steps:
-- name: gcr.io/cloud-builders/docker
-  args:
-    - build
-    - -f
-    - apps/api/Dockerfile
-    - -t
-    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
-    - apps/api
-
-- name: gcr.io/cloud-builders/docker
-  args: ["push", "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}"]
-
-- name: gcr.io/google.com/cloudsdktool/cloud-sdk
-  entrypoint: gcloud
-  args:
-    - run
-    - deploy
-    - ${_SERVICE}
-    - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
-    - --region=${_REGION}
-    - --project=${PROJECT_ID}
-    - --allow-unauthenticated
-    - --set-env-vars=ALLOWED_ORIGIN=https://manthan-frontend-${_REGION}.run.app
-    - --set-env-vars=MODEL_NAME=gpt-5
-    - --set-env-vars=GCP_PROJECT_ID=${PROJECT_ID}
-    - --set-env-vars=GCS_BUCKET=manthan-assets
-    - --set-env-vars=FIRESTORE_NAMESPACE=prod
-    - --set-env-vars=ENABLE_IMAGE_GEN=false
-    - --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest
-    - --cpu=1
-    - --memory=512Mi
 
 
 
