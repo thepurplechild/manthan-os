@@ -1,5 +1,6 @@
 "use client";
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 import { useEffect, useState } from "react";
 import { collection, addDoc, getDocs } from "firebase/firestore";
@@ -43,17 +44,12 @@ export default function Outreach() {
       <h2 className="text-2xl font-semibold">Outreach Pipeline (Minimal)</h2>
 
       <div className="grid gap-2">
-        <input placeholder="Name" value={name} onChange={e=>setName(e.target.value)}
-               className="bg-white/5 rounded px-3 py-2"/>
-        <input placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}
-               className="bg-white/5 rounded px-3 py-2"/>
-        <textarea placeholder="Notes" value={notes} onChange={e=>setNotes(e.target.value)}
-                  className="bg-white/5 rounded px-3 py-2"/>
+        <input placeholder="Name" value={name} onChange={e=>setName(e.target.value)} className="bg-white/5 rounded px-3 py-2"/>
+        <input placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} className="bg-white/5 rounded px-3 py-2"/>
+        <textarea placeholder="Notes" value={notes} onChange={e=>setNotes(e.target.value)} className="bg-white/5 rounded px-3 py-2"/>
         <div className="flex gap-2">
-          <button disabled={busy || !db} onClick={addLead}
-                  className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/20 disabled:opacity-50">Add</button>
-          <button disabled={!db} onClick={() => load()}
-                  className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/20 disabled:opacity-50">Refresh</button>
+          <button disabled={busy || !db} onClick={addLead} className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/20 disabled:opacity-50">Add</button>
+          <button disabled={!db} onClick={() => load()} className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/20 disabled:opacity-50">Refresh</button>
         </div>
       </div>
 
