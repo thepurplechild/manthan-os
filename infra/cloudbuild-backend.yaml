@@ -1,21 +1,22 @@
-# infra/cloudbuild-backend.yaml
+# infra/cloudbuild-frontend.yaml
 options:
   logging: CLOUD_LOGGING_ONLY
 
 substitutions:
   _REGION: asia-south1
   _REPO: manthan-repo
-  _SERVICE: manthan-backend
+  _SERVICE: manthan-frontend
+  _API_BASE: https://manthan-backend-${_REGION}.run.app
 
 steps:
 - name: gcr.io/cloud-builders/docker
   args:
     - build
     - -f
-    - apps/api/Dockerfile
+    - apps/web/Dockerfile
     - -t
     - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
-    - apps/api
+    - .
 
 - name: gcr.io/cloud-builders/docker
   args:
@@ -32,13 +33,16 @@ steps:
     - --region=${_REGION}
     - --project=${PROJECT_ID}
     - --allow-unauthenticated
-    - --set-env-vars=ALLOWED_ORIGIN=https://manthan-frontend-${_REGION}.run.app
-    - --set-env-vars=MODEL_NAME=gpt-5
-    - --set-env-vars=GCP_PROJECT_ID=${PROJECT_ID}
-    - --set-env-vars=GCS_BUCKET=manthan-assets
-    - --set-env-vars=FIRESTORE_NAMESPACE=prod
-    - --set-env-vars=ENABLE_IMAGE_GEN=false
-    - --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest
+    - --set-env-vars=NEXT_PUBLIC_API_BASE=${_API_BASE}
+    - --set-env-vars=NEXT_PUBLIC_POSTHOG_KEY=
+    - --set-env-vars=NEXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com
+    - --set-env-vars=NEXT_PUBLIC_FIREBASE_API_KEY=
+    - --set-env-vars=NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+    - --set-env-vars=NEXT_PUBLIC_FIREBASE_PROJECT_ID=${PROJECT_ID}
+    - --set-env-vars=NEXT_PUBLIC_FIREBASE_APP_ID=
+    - --set-env-vars=NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=manthan-assets
+    - --set-env-vars=NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
     - --cpu=1
     - --memory=512Mi
+
 
