@@ -2,7 +2,6 @@
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
-
 import { useState } from "react";
 import { api } from "../../src/lib/api";
 
@@ -21,9 +20,9 @@ export default function Guided() {
   async function stepIdea() {
     setBusy(true);
     const r = await api.post("/gen/idea", { genre, tone: "cinematic", seed, language });
-    setIdea(r.data.content || "");
-    // try to pull first logline automatically
-    const first = String(r.data.content || "").split("\n").find(l => l.trim()) || "";
+    const content = r.data?.content ?? "";
+    setIdea(content);
+    const first = String(content).split("\n").find(l => l.trim()) || "";
     setLogline(first.replace(/^\d+[\).\s-]*/, "").trim());
     setBusy(false);
   }
@@ -31,14 +30,14 @@ export default function Guided() {
   async function stepOutline() {
     setBusy(true);
     const r = await api.post("/gen/outline", { logline, structure: "film", style: "Bollywood high-concept thriller", language });
-    setOutline(r.data.content || "");
+    setOutline(r.data?.content ?? "");
     setBusy(false);
   }
 
   async function stepScript() {
     setBusy(true);
     const r = await api.post("/gen/script", { outline, style: "Bollywood high-concept thriller", language });
-    setScript(r.data.content || "");
+    setScript(r.data?.content ?? "");
     setBusy(false);
   }
 
@@ -55,7 +54,7 @@ export default function Guided() {
       language
     };
     const r = await api.post("/gen/deck", payload);
-    setDeck(r.data.deck || { raw: "No deck data" });
+    setDeck(r.data?.deck || { raw: "No deck data" });
     setBusy(false);
   }
 
@@ -72,12 +71,7 @@ export default function Guided() {
       <h2 className="text-2xl font-semibold">Guided Path</h2>
 
       <div className="grid gap-3">
-        <input
-          placeholder="Seed Idea"
-          value={seed}
-          onChange={e=>setSeed(e.target.value)}
-          className="bg-white/5 rounded px-3 py-2"
-        />
+        <input placeholder="Seed Idea" value={seed} onChange={e=>setSeed(e.target.value)} className="bg-white/5 rounded px-3 py-2"/>
 
         <div className="flex gap-2">
           <select value={genre} onChange={e=>setGenre(e.target.value)} className="bg-white/5 rounded px-3 py-2">
@@ -94,12 +88,7 @@ export default function Guided() {
         <button disabled={busy} onClick={stepIdea} className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/20">Generate Ideas</button>
         <textarea rows={6} value={idea} onChange={e=>setIdea(e.target.value)} className="bg-white/5 rounded p-3" />
 
-        <input
-          placeholder="Chosen logline"
-          value={logline}
-          onChange={e=>setLogline(e.target.value)}
-          className="bg-white/5 rounded px-3 py-2"
-        />
+        <input placeholder="Chosen logline" value={logline} onChange={e=>setLogline(e.target.value)} className="bg-white/5 rounded px-3 py-2"/>
 
         <button disabled={busy} onClick={stepOutline} className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/20">Generate Outline</button>
         <textarea rows={10} value={outline} onChange={e=>setOutline(e.target.value)} className="bg-white/5 rounded p-3" />
@@ -118,4 +107,5 @@ export default function Guided() {
     </main>
   );
 }
+
 
