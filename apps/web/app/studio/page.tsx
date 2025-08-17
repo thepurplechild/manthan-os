@@ -1,5 +1,6 @@
 "use client";
 export const dynamic = "force-dynamic";
+
 import { useState } from "react";
 import { useAuth } from "../../src/components/AuthProvider";
 import { api } from "../../src/lib/api";
