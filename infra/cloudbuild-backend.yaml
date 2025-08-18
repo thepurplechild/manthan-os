@@ -1,5 +1,4 @@
-# Manthan — Backend (auto-detect Dockerfile)
-# Builds FastAPI image, pushes to Artifact Registry, deploys to Cloud Run.
+# Manthan — Backend (auto-detect Dockerfile) → Artifact Registry → Cloud Run
 
 substitutions:
   _REGION: asia-south1
@@ -7,20 +6,14 @@ substitutions:
   _REPO: manthan
   _SERVICE: manthan-backend
 
-  # Backend runtime env (can override in Trigger UI)
-  _ALLOWED_ORIGIN: ""            # e.g. https://manthan-frontend-xxxx-asia-south1.run.app
+  _ALLOWED_ORIGIN: ""      # e.g. https://manthan-frontend-xxxx-asia-south1.run.app
   _MODEL_NAME: gpt-5
   _GCS_BUCKET: manthan-assets
   _FIRESTORE_NAMESPACE: prod
   _ENABLE_IMAGE_GEN: "false"
 
-# One of these must exist in your repo:
-#   Dockerfile.backend
-#   apps/api/Dockerfile.backend
-#   apps/api/Dockerfile
-#   Dockerfile
 steps:
-  # Detect Dockerfile path for backend and store to a file
+  # Detect backend Dockerfile path (escape $ as $$ so Cloud Build doesn't substitute)
   - name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
     args:
@@ -34,14 +27,14 @@ steps:
           "apps/api/Dockerfile" \
           "Dockerfile"
         do
-          if [[ -f "$CAND" ]]; then DF="$CAND"; break; fi
+          if [[ -f "$$CAND" ]]; then DF="$$CAND"; break; fi
         done
-        if [[ -z "$DF" ]]; then
+        if [[ -z "$$DF" ]]; then
           echo "ERROR: No backend Dockerfile found. Expected one of: Dockerfile.backend, apps/api/Dockerfile.backend, apps/api/Dockerfile, Dockerfile"
           exit 1
         fi
-        echo "Using backend Dockerfile: $DF"
-        echo -n "$DF" > .df_backend
+        echo "Using backend Dockerfile: $$DF"
+        echo -n "$$DF" > .df_backend
         echo "IMAGE=${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}"
 
   # Build
@@ -53,7 +46,7 @@ steps:
         DF="$(cat .df_backend)"
         docker build \
           -t "${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}" \
-          -f "$DF" .
+          -f "$$DF" .
 
   # Push
   - name: gcr.io/cloud-builders/docker
@@ -61,7 +54,7 @@ steps:
       - push
       - ${_REGION}-docker.pkg.dev/${_PROJECT}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
 
-  # Deploy to Cloud Run (always pass env + secret)
+  # Deploy
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
@@ -71,9 +64,7 @@ steps:
         "--region","${_REGION}",
         "--platform","managed",
         "--allow-unauthenticated",
-        "--memory","1Gi",
-        "--cpu","1",
-        "--timeout","300",
+        "--memory","1Gi","--cpu","1","--timeout","300",
         "--set-env-vars",
         "ALLOWED_ORIGIN=${_ALLOWED_ORIGIN},MODEL_NAME=${_MODEL_NAME},GCP_PROJECT_ID=${_PROJECT},GCS_BUCKET=${_GCS_BUCKET},FIRESTORE_NAMESPACE=${_FIRESTORE_NAMESPACE},ENABLE_IMAGE_GEN=${_ENABLE_IMAGE_GEN}",
         "--update-secrets","OPENAI_API_KEY=OPENAI_API_KEY:latest"
@@ -84,6 +75,8 @@ images:
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  substitutionOption: ALLOW_LOOSE
 
 timeout: "1200s"
+
 
