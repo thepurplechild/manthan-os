@@ -1,54 +1,62 @@
-# infra/cloudbuild-backend.yaml
-# Cloud Build → builds + deploys the FastAPI backend to Cloud Run (Phase 1)
+# =========================
+# Frontend (Next.js App Router)
+# Monorepo path: apps/web
+# Output: Cloud Run-ready distroless image
+# =========================
 
-options:
-  logging: CLOUD_LOGGING_ONLY
+# ---- 1) DEPS: install workspace deps with pnpm (faster, reproducible)
+FROM node:20-bookworm-slim AS deps
+WORKDIR /app
+ENV NODE_ENV=development
+# Ensure pnpm is available
+RUN corepack enable
 
-substitutions:
-  _REGION: asia-south1
-  _REPO: manthan-repo
-  _SERVICE: manthan-backend
-  # Frontend URL (adjust if your actual Cloud Run URL differs)
-  _ALLOWED_ORIGIN: https://manthan-frontend-asia-south1.run.app
+# Copy only manifests first for better layer caching
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY apps/web/package.json apps/web/
 
-steps:
-  # 1) Build image from monorepo root using the backend Dockerfile
-  - name: gcr.io/cloud-builders/docker
-    args:
-      - build
-      - -f
-      - apps/api/Dockerfile
-      - -t
-      - $_REGION-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
-      - -t
-      - $_REGION-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
-      - .
+# Install workspace dependencies (no build yet)
+# We install at the root so workspaces are hoisted correctly.
+RUN pnpm install --frozen-lockfile
 
-  # 2) Push tags
-  - name: gcr.io/cloud-builders/docker
-    args: ["push", "$_REGION-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA"]
-  - name: gcr.io/cloud-builders/docker
-    args: ["push", "$_REGION-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest"]
+# ---- 2) BUILD: copy full repo and build Next in standalone mode
+FROM node:20-bookworm-slim AS builder
+WORKDIR /app
+ENV NODE_ENV=production
+RUN corepack enable
 
-  # 3) Deploy to Cloud Run
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - ${_SERVICE}
-      - --image=$_REGION-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
-      - --region=${_REGION}
-      - --platform=managed
-      - --allow-unauthenticated
-      - --port=8080
-      - --cpu=1
-      - --memory=512Mi
-      - --max-instances=3
-      - --set-env-vars=ALLOWED_ORIGIN=${_ALLOWED_ORIGIN}
-      - --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest
+# Bring in node_modules from deps stage
+COPY --from=deps /app/node_modules /app/node_modules
+COPY --from=deps /app/apps/web/node_modules /app/apps/web/node_modules
+COPY --from=deps /app/package.json /app/package.json
+COPY --from=deps /app/apps/web/package.json /app/apps/web/package.json
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 
-images:
-  - $_REGION-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+# Copy the rest of the repository (source code, components, etc.)
+COPY . .
+
+# IMPORTANT: build only the web app (monorepo)
+# This will produce .next/standalone, .next/static because next.config output=standalone
+RUN pnpm -w build --filter ./apps/web
+
+# ---- 3) RUNTIME: super small, secure image
+FROM gcr.io/distroless/nodejs20-debian12 AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+# Cloud Run listens on PORT; Next's server.js uses process.env.PORT || 3000
+ENV PORT=8080
+EXPOSE 8080
+
+# Copy the Next.js standalone server and static assets
+# After the build, Next places a self-contained server at apps/web/.next/standalone
+COPY --from=builder /app/apps/web/.next/standalone ./
+# Static assets (required for _next/static/*)
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+# Public assets (e.g., /brand-wordmark-mos.svg)
+COPY --from=builder /app/apps/web/public ./apps/web/public
+
+# Start the Next standalone server (distroless already has node runtime)
+CMD ["apps/web/server.js"]
+
 
 
