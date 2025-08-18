@@ -1,14 +1,21 @@
-// apps/web/app/layout.tsx
-export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
+import type { Metadata } from "next";
+import "./globals.css";
+import TopNav from "../components/Nav/TopNav";
+import { Inter } from "next/font/google";
 
-import "../src/styles/globals.css";
+const inter = Inter({ subsets: ["latin"] });
+
+export const metadata: Metadata = {
+  title: "Manthan Studio",
+  description: "Creator Suite for premium, cinematic stories",
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-black text-white">
-        {children}
+      <body className={inter.className}>
+        <TopNav />
+        <main>{children}</main>
       </body>
     </html>
   );
