@@ -1,99 +1,153 @@
 "use client";
-export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
-
 import { useState } from "react";
-import { api } from "../../src/lib/api";
+import styles from "../../components/Wizard/Wizard.module.css";
+import OptionCard from "../../components/Wizard/OptionCard";
+import { GenAPI, OutlineOption, ScriptOption } from "../../lib/api";
 
-export default function Accelerated() {
-  const [language, setLanguage] = useState("en");
+export default function AcceleratedPage() {
+  const [language, setLanguage] = useState("Hindi");
+  const [extracted, setExtracted] = useState<string>("");
+  const [outlines, setOutlines] = useState<OutlineOption[]>([]);
+  const [chosenOutlineIdx, setChosenOutlineIdx] = useState<number | null>(null);
+  const [scripts, setScripts] = useState<ScriptOption[]>([]);
+  const [chosenScriptIdx, setChosenScriptIdx] = useState<number | null>(null);
+  const [deckJson, setDeckJson] = useState<any | null>(null);
   const [busy, setBusy] = useState(false);
-  const [extracted, setExtracted] = useState("");
-  const [deck, setDeck] = useState<any>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f) return;
+  function toast(e:any){ setErr(e?.message||"Error"); setTimeout(()=>setErr(null),2800); }
+
+  async function onUpload(file: File) {
     const fd = new FormData();
-    fd.append("file", f);
+    fd.append("file", file);
     fd.append("language", language);
     setBusy(true);
     try {
-      const r = await api.post("/ingest/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      setExtracted(r.data?.extracted ?? "");
-    } finally {
-      setBusy(false);
-    }
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/ingest/upload`, { method: "POST", body: fd });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setExtracted(data.extracted || "");
+    } catch(e:any){ toast(e); } finally { setBusy(false); }
   }
 
-  async function buildDeck() {
+  async function onGenOutlines() {
+    if (!extracted.trim()) return toast(new Error("Upload a file first."));
     setBusy(true);
     try {
-      const payload = {
-        title: "Untitled",
-        logline: "",
-        synopsis: extracted,
-        characters: "TBD",
-        world: "TBD",
-        comps: "TBD",
-        toneboard: "TBD",
+      const { options } = await GenAPI.outlines({
+        logline: extracted.slice(0, 800),
+        structure: "film",
+        style: "Bollywood high-concept thriller",
         language
-      };
-      const r = await api.post("/gen/deck", payload);
-      setDeck(r.data?.deck || { raw: "No deck data" });
-    } finally {
-      setBusy(false);
-    }
+      });
+      setOutlines(options); setChosenOutlineIdx(null);
+    } catch(e:any){ toast(e); } finally { setBusy(false); }
   }
 
-  async function exportDeck(format: "pdf" | "docx") {
-    if (!deck) return;
+  async function onGenScripts() {
+    const outline = chosenOutlineIdx!=null ? outlines[chosenOutlineIdx] : null;
+    if (!outline) return toast(new Error("Choose an outline first."));
     setBusy(true);
     try {
-      const r = await api.post("/export", { deck_json: deck, format });
-      if (r.data?.url) window.open(r.data.url, "_blank");
-    } finally {
-      setBusy(false);
-    }
+      const { options } = await GenAPI.scripts({ outline: outline.outline, style:"cinematic", language });
+      setScripts(options); setChosenScriptIdx(null);
+    } catch(e:any){ toast(e); } finally { setBusy(false); }
+  }
+
+  async function onBuildDeck() {
+    const outline = chosenOutlineIdx!=null ? outlines[chosenOutlineIdx] : null;
+    const script = chosenScriptIdx!=null ? scripts[chosenScriptIdx] : null;
+    if (!outline || !script) return toast(new Error("Choose outline + script."));
+    setBusy(true);
+    try {
+      const { options } = await GenAPI.deckBuild({
+        title: "Untitled",
+        logline: extracted.slice(0, 140),
+        synopsis: extracted.slice(0, 800),
+        characters: "From extraction and outline.",
+        world: "From extraction.",
+        comps: "Comparable Indian titles",
+        toneboard: "Premium, cinematic",
+        language
+      });
+      setDeckJson(options[0]?.deck || null);
+    } catch(e:any){ toast(e); } finally { setBusy(false); }
+  }
+
+  async function onExport(fmt: "pdf"|"docx") {
+    if (!deckJson) return;
+    const { url } = await GenAPI.export({ deck_json: deckJson, format: fmt });
+    window.open(url, "_blank");
   }
 
   return (
-    <main className="max-w-4xl mx-auto p-6 space-y-6">
-      <h2 className="text-2xl font-semibold">Accelerated Path</h2>
+    <div className={styles.container}>
+      <div className={styles.hero}><div className={styles.title}>Accelerated Path</div>
+        <div className={styles.subtitle}>Upload → extract → outline → script → deck</div></div>
 
-      <div className="flex items-center gap-3">
-        <select value={language} onChange={e=>setLanguage(e.target.value)} className="bg-white/5 rounded px-3 py-2">
-          <option value="en">English</option><option value="hi">Hindi</option>
-          <option value="ta">Tamil</option><option value="te">Telugu</option>
-          <option value="bn">Bengali</option><option value="mr">Marathi</option>
-        </select>
-
-        <input type="file" accept=".txt,.md,.docx,.pdf" onChange={onUpload} className="block text-sm" />
-        {busy && <span className="text-sm text-gray-400">Working…</span>}
+      <div className={styles.panel}>
+        <div className={styles.controls}>
+          <select value={language} onChange={(e)=>setLanguage(e.target.value)} className={styles.secondary}>
+            <option>Hindi</option><option>English</option><option>Tamil</option><option>Telugu</option>
+          </select>
+          <input type="file" onChange={(e)=>{ const f=e.target.files?.[0]; if (f) onUpload(f); }} />
+        </div>
+        <textarea className={styles.textarea} placeholder="Extraction preview" value={extracted}
+          onChange={(e)=>setExtracted(e.target.value)} />
+        <div className={styles.footer}>
+          <button className={styles.primary} onClick={onGenOutlines} disabled={busy}>Generate Outlines</button>
+        </div>
       </div>
 
-      <div className="grid gap-3">
-        <label className="text-sm text-gray-400">Extracted summary / fields</label>
-        <textarea rows={10} value={extracted} onChange={e=>setExtracted(e.target.value)} className="bg-white/5 rounded p-3" />
-      </div>
+      {outlines.length>0 && (
+        <>
+          <h3 style={{margin:"14px 0 8px"}}>Outlines (choose one)</h3>
+          <div className={styles.row}>
+            {outlines.map((o,idx)=>(
+              <OptionCard key={idx} title={`Outline ${idx+1}`} value={o.outline}
+                onChange={(v)=>{ const arr=[...outlines]; arr[idx]={outline:v}; setOutlines(arr); }}
+                onChoose={()=>setChosenOutlineIdx(idx)} chosen={chosenOutlineIdx===idx} />
+            ))}
+          </div>
+          <div className={styles.footer}>
+            <button className={styles.primary} onClick={onGenScripts} disabled={busy||chosenOutlineIdx==null}>Generate Script Pages</button>
+          </div>
+        </>
+      )}
 
-      <div className="flex gap-2">
-        <button disabled={!extracted || busy} onClick={buildDeck}
-                className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/20 disabled:opacity-50">
-          Build Deck JSON
-        </button>
-        <button disabled={!deck || busy} onClick={() => exportDeck("pdf")}
-                className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/20 disabled:opacity-50">
-          Export PDF
-        </button>
-        <button disabled={!deck || busy} onClick={() => exportDeck("docx")}
-                className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/20 disabled:opacity-50">
-          Export Docx
-        </button>
-      </div>
+      {scripts.length>0 && (
+        <>
+          <h3 style={{margin:"14px 0 8px"}}>Script (choose one)</h3>
+          <div className={styles.row}>
+            {scripts.map((s,idx)=>(
+              <OptionCard key={idx} title={`Script ${idx+1}`} value={s.script}
+                onChange={(v)=>{ const arr=[...scripts]; arr[idx]={script:v}; setScripts(arr); }}
+                onChoose={()=>setChosenScriptIdx(idx)} chosen={chosenScriptIdx===idx} />
+            ))}
+          </div>
+          <div className={styles.footer}>
+            <button className={styles.primary} onClick={onBuildDeck} disabled={busy||chosenScriptIdx==null}>Build Deck JSON</button>
+          </div>
+        </>
+      )}
 
-      <pre className="bg-black/40 p-3 rounded overflow-auto text-xs">{JSON.stringify(deck, null, 2)}</pre>
-    </main>
+      {deckJson && (
+        <>
+          <h3 style={{margin:"14px 0 8px"}}>Deck JSON</h3>
+          <div className={styles.panel}>
+            <textarea className={styles.textarea} style={{minHeight:220}}
+              value={JSON.stringify(deckJson,null,2)} onChange={(e)=>{ try{ setDeckJson(JSON.parse(e.target.value)); } catch{} }} />
+            <div className={styles.footer}>
+              <button className={styles.secondary} onClick={()=>onExport("docx")}>Export Docx</button>
+              <button className={styles.primary} onClick={()=>onExport("pdf")}>Export PDF</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {err && <div style={{marginTop:12, color:"#ffb4b4"}}>{err}</div>}
+    </div>
   );
 }
+
 
