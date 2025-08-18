@@ -1,110 +1,291 @@
 "use client";
-export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import styles from "../../components/Wizard/Wizard.module.css";
+import OptionCard from "../../components/Wizard/OptionCard";
+import { GenAPI, IdeaOption, OutlineOption, ScriptOption, ProjectsAPI } from "../../lib/api";
+import { requireUid } from "../../lib/firebase";
 
-import { useState } from "react";
-import { api } from "../../src/lib/api";
+type Step = 0 | 1 | 2 | 3 | 4; // Ideas, Outline, Script, Deck, Export
 
-export default function Guided() {
-  const [seed, setSeed] = useState("");
+export default function GuidedPage() {
+  const router = useRouter();
+  const qs = useSearchParams();
+
+  const [step, setStep] = useState<Step>(0);
   const [genre, setGenre] = useState("thriller");
-  const [language, setLanguage] = useState("en");
+  const [language, setLanguage] = useState("Hindi");
+  const [tone, setTone] = useState("gritty");
+  const [seed, setSeed] = useState("");
 
+  const [ideas, setIdeas] = useState<IdeaOption[]>([]);
+  const [chosenIdeaIdx, setChosenIdeaIdx] = useState<number | null>(null);
+  const [outlines, setOutlines] = useState<OutlineOption[]>([]);
+  const [chosenOutlineIdx, setChosenOutlineIdx] = useState<number | null>(null);
+  const [scripts, setScripts] = useState<ScriptOption[]>([]);
+  const [chosenScriptIdx, setChosenScriptIdx] = useState<number | null>(null);
+  const [deckJson, setDeckJson] = useState<any | null>(null);
+
+  const [projectId, setProjectId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [idea, setIdea] = useState("");
-  const [logline, setLogline] = useState("");
-  const [outline, setOutline] = useState("");
-  const [script, setScript] = useState("");
-  const [deck, setDeck] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  async function stepIdea() {
-    setBusy(true);
-    const r = await api.post("/gen/idea", { genre, tone: "cinematic", seed, language });
-    const content = r.data?.content ?? "";
-    setIdea(content);
-    const first = String(content).split("\n").find(l => l.trim()) || "";
-    setLogline(first.replace(/^\d+[\).\s-]*/, "").trim());
-    setBusy(false);
+  const stepNames = ["Ideas", "Outline", "Script", "Deck", "Export"];
+
+  useEffect(() => {
+    const pid = qs.get("pid");
+    if (pid) {
+      (async () => {
+        try {
+          const uid = await requireUid();
+          const data = await ProjectsAPI.get(uid, pid);
+          setProjectId(pid);
+          // hydrate if steps existed
+          const steps = data.steps || {};
+          if (steps.ideas) { setIdeas(steps.ideas.options || []); setChosenIdeaIdx(steps.ideas.chosen ?? null); }
+          if (steps.outline) { setOutlines(steps.outline.options || []); setChosenOutlineIdx(steps.outline.chosen ?? null); }
+          if (steps.script) { setScripts(steps.script.options || []); setChosenScriptIdx(steps.script.chosen ?? null); }
+          if (steps.deck) { setDeckJson(steps.deck.deckJson || null); }
+        } catch { /* ignore if not found */ }
+      })();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function toastErr(e: any) {
+    console.error(e);
+    setError(typeof e === "string" ? e : e?.message || "Something went wrong");
+    setTimeout(() => setError(null), 2800);
   }
 
-  async function stepOutline() {
-    setBusy(true);
-    const r = await api.post("/gen/outline", { logline, structure: "film", style: "Bollywood high-concept thriller", language });
-    setOutline(r.data?.content ?? "");
-    setBusy(false);
+  async function ensureProject(): Promise<{ uid: string; pid: string }> {
+    const uid = await requireUid();
+    if (projectId) return { uid, pid: projectId };
+    const created = await ProjectsAPI.create(uid, "Guided Project");
+    setProjectId(created.project_id);
+    // update URL so user can resume
+    router.replace(`/guided?pid=${created.project_id}`);
+    return { uid, pid: created.project_id };
   }
 
-  async function stepScript() {
+  async function onGenIdeas() {
+    if (!seed.trim()) return toastErr("Please enter a premise/seed.");
     setBusy(true);
-    const r = await api.post("/gen/script", { outline, style: "Bollywood high-concept thriller", language });
-    setScript(r.data?.content ?? "");
-    setBusy(false);
+    try {
+      const { options } = await GenAPI.ideas({ genre, tone, seed, language });
+      setIdeas(options.map(o => ({ ...o })));
+      setChosenIdeaIdx(null);
+      setStep(0);
+      const { uid, pid } = await ensureProject();
+      await ProjectsAPI.saveStep(uid, pid, "ideas", { options, chosen: null, meta: { genre, tone, language, seed } });
+    } catch (e) { toastErr(e); } finally { setBusy(false); }
   }
 
-  async function stepDeck() {
+  async function onGenOutlines() {
+    const idea = chosenIdeaIdx != null ? ideas[chosenIdeaIdx] : null;
+    if (!idea) return toastErr("Choose an idea first.");
     setBusy(true);
-    const payload = {
-      title: (logline || "Untitled").slice(0, 80),
-      logline,
-      synopsis: outline,
-      characters: "TBD",
-      world: "TBD",
-      comps: "TBD",
-      toneboard: "TBD",
-      language
-    };
-    const r = await api.post("/gen/deck", payload);
-    setDeck(r.data?.deck || { raw: "No deck data" });
-    setBusy(false);
+    try {
+      const { options } = await GenAPI.outlines({
+        logline: idea.logline + "\n\n" + idea.premise,
+        structure: "film",
+        style: "Bollywood high-concept thriller",
+        language
+      });
+      setOutlines(options.map(o => ({ ...o })));
+      setChosenOutlineIdx(null);
+      setStep(1);
+      const { uid, pid } = await ensureProject();
+      await ProjectsAPI.saveStep(uid, pid, "outline", { options, chosen: null, input: idea });
+    } catch (e) { toastErr(e); } finally { setBusy(false); }
   }
 
-  async function exportDeck(format: "pdf" | "docx") {
-    if (!deck) return;
+  async function onGenScripts() {
+    const outline = chosenOutlineIdx != null ? outlines[chosenOutlineIdx] : null;
+    if (!outline) return toastErr("Choose an outline first.");
     setBusy(true);
-    const r = await api.post("/export", { deck_json: deck, format });
-    setBusy(false);
-    if (r.data?.url) window.open(r.data.url, "_blank");
+    try {
+      const { options } = await GenAPI.scripts({ outline: outline.outline, style: "cinematic, grounded, commercial", language });
+      setScripts(options.map(o => ({ ...o })));
+      setChosenScriptIdx(null);
+      setStep(2);
+      const { uid, pid } = await ensureProject();
+      await ProjectsAPI.saveStep(uid, pid, "script", { options, chosen: null, input: outline });
+    } catch (e) { toastErr(e); } finally { setBusy(false); }
   }
+
+  async function onBuildDeck() {
+    const idea = chosenIdeaIdx != null ? ideas[chosenIdeaIdx] : null;
+    const outline = chosenOutlineIdx != null ? outlines[chosenOutlineIdx] : null;
+    const script = chosenScriptIdx != null ? scripts[chosenScriptIdx] : null;
+    if (!idea || !outline || !script) return toastErr("Choose items in all previous steps.");
+    setBusy(true);
+    try {
+      const { options } = await GenAPI.deckBuild({
+        title: (idea.logline || "Untitled").slice(0, 60),
+        logline: idea.logline,
+        synopsis: idea.premise,
+        characters: "Key characters:\n" + outline.outline.slice(0, 800),
+        world: "World & tone:\n" + tone,
+        comps: "Comparable titles suitable for Indian market",
+        toneboard: "Moody, premium, cinematic",
+        language
+      });
+      const built = options[0]?.deck || null;
+      setDeckJson(built);
+      setStep(3);
+      const { uid, pid } = await ensureProject();
+      await ProjectsAPI.saveStep(uid, pid, "deck", { deckJson: built });
+    } catch (e) { toastErr(e); } finally { setBusy(false); }
+  }
+
+  async function onExport(fmt: "pdf" | "docx") {
+    if (!deckJson) return toastErr("Build the deck first.");
+    setBusy(true);
+    try {
+      const { url } = await GenAPI.export({ deck_json: deckJson, format: fmt });
+      window.open(url, "_blank");
+      setStep(4);
+    } catch (e) { toastErr(e); } finally { setBusy(false); }
+  }
+
+  const stepNames = ["Ideas", "Outline", "Script", "Deck", "Export"];
 
   return (
-    <main className="max-w-4xl mx-auto p-6 space-y-6">
-      <h2 className="text-2xl font-semibold">Guided Path</h2>
-
-      <div className="grid gap-3">
-        <input placeholder="Seed Idea" value={seed} onChange={e=>setSeed(e.target.value)} className="bg-white/5 rounded px-3 py-2"/>
-
-        <div className="flex gap-2">
-          <select value={genre} onChange={e=>setGenre(e.target.value)} className="bg-white/5 rounded px-3 py-2">
-            <option>thriller</option><option>drama</option><option>rom-com</option>
-            <option>action</option><option>satire</option><option>fantasy</option>
-          </select>
-          <select value={language} onChange={e=>setLanguage(e.target.value)} className="bg-white/5 rounded px-3 py-2">
-            <option value="en">English</option><option value="hi">Hindi</option>
-            <option value="ta">Tamil</option><option value="te">Telugu</option>
-            <option value="bn">Bengali</option><option value="mr">Marathi</option>
-          </select>
-        </div>
-
-        <button disabled={busy} onClick={stepIdea} className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/20">Generate Ideas</button>
-        <textarea rows={6} value={idea} onChange={e=>setIdea(e.target.value)} className="bg-white/5 rounded p-3" />
-
-        <input placeholder="Chosen logline" value={logline} onChange={e=>setLogline(e.target.value)} className="bg-white/5 rounded px-3 py-2"/>
-
-        <button disabled={busy} onClick={stepOutline} className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/20">Generate Outline</button>
-        <textarea rows={10} value={outline} onChange={e=>setOutline(e.target.value)} className="bg-white/5 rounded p-3" />
-
-        <button disabled={busy} onClick={stepScript} className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/20">Generate Script Pages</button>
-        <textarea rows={10} value={script} onChange={e=>setScript(e.target.value)} className="bg-white/5 rounded p-3" />
-
-        <button disabled={busy} onClick={stepDeck} className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/20">Build Deck JSON</button>
-        <pre className="bg-black/40 p-3 rounded overflow-auto text-xs">{JSON.stringify(deck, null, 2)}</pre>
-
-        <div className="flex gap-2">
-          <button disabled={!deck || busy} onClick={() => exportDeck("pdf")} className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/20">Export PDF</button>
-          <button disabled={!deck || busy} onClick={() => exportDeck("docx")} className="rounded-xl bg-white/10 px-4 py-2 hover:bg-white/20">Export Docx</button>
-        </div>
+    <div className={styles.container}>
+      <div className={styles.hero}>
+        <div className={styles.title}>Guided Path</div>
+        <div className={styles.subtitle}>From premise → deck in 4 steps</div>
       </div>
-    </main>
+
+      <div className={styles.stepper}>
+        {stepNames.map((s, i) => (
+          <div key={s} className={`${styles.step} ${i===step ? styles.stepActive : ""}`}>{s}</div>
+        ))}
+      </div>
+
+      {step === 0 && (
+        <div className={styles.panel}>
+          <div className={styles.controls}>
+            <select value={genre} onChange={(e)=>setGenre(e.target.value)} className={styles.secondary}>
+              <option>thriller</option><option>drama</option><option>romance</option><option>comedy</option>
+            </select>
+            <select value={language} onChange={(e)=>setLanguage(e.target.value)} className={styles.secondary}>
+              <option>Hindi</option><option>English</option><option>Tamil</option><option>Telugu</option>
+            </select>
+            <input className={styles.secondary} placeholder="Tone (e.g., gritty, witty)"
+                   value={tone} onChange={(e)=>setTone(e.target.value)} />
+          </div>
+          <textarea className={styles.textarea}
+            placeholder="Premise / seed"
+            value={seed}
+            onChange={(e)=>setSeed(e.target.value)}
+          />
+          <div className={styles.footer}>
+            <button className={styles.primary} onClick={onGenIdeas} disabled={busy}>Generate Ideas</button>
+          </div>
+        </div>
+      )}
+
+      {ideas.length > 0 && (
+        <>
+          <h3 style={{margin:"14px 0 8px"}}>Ideas (choose one)</h3>
+          <div className={styles.row}>
+            {ideas.map((it, idx) => (
+              <OptionCard
+                key={idx}
+                title={`Idea ${idx+1}`}
+                value={`Logline: ${it.logline}\n\nPremise: ${it.premise}`}
+                onChange={(v)=>{
+                  const [l, ...rest] = v.split("\n\nPremise:");
+                  const logline = (l.replace(/^Logline:\s*/i,"").trim());
+                  const premise = (rest.join("Premise:") || "").trim();
+                  const newArr = [...ideas];
+                  newArr[idx] = { logline, premise };
+                  setIdeas(newArr);
+                }}
+                onChoose={() => setChosenIdeaIdx(idx)}
+                chosen={chosenIdeaIdx === idx}
+              />
+            ))}
+          </div>
+          <div className={styles.footer}>
+            <button className={styles.secondary} onClick={()=>setIdeas([])}>Reset ideas</button>
+            <button className={styles.primary} onClick={onGenOutlines} disabled={busy || chosenIdeaIdx==null}>
+              Generate Outlines
+            </button>
+          </div>
+        </>
+      )}
+
+      {outlines.length > 0 && (
+        <>
+          <h3 style={{margin:"14px 0 8px"}}>Outlines (choose one)</h3>
+          <div className={styles.row}>
+            {outlines.map((it, idx) => (
+              <OptionCard
+                key={idx}
+                title={`Outline ${idx+1}`}
+                value={it.outline}
+                onChange={(v)=>{ const arr=[...outlines]; arr[idx]={ outline:v }; setOutlines(arr); }}
+                onChoose={() => setChosenOutlineIdx(idx)}
+                chosen={chosenOutlineIdx === idx}
+              />
+            ))}
+          </div>
+          <div className={styles.footer}>
+            <button className={styles.secondary} onClick={()=>setOutlines([])}>Reset outlines</button>
+            <button className={styles.primary} onClick={onGenScripts} disabled={busy || chosenOutlineIdx==null}>
+              Generate Script Pages
+            </button>
+          </div>
+        </>
+      )}
+
+      {scripts.length > 0 && (
+        <>
+          <h3 style={{margin:"14px 0 8px"}}>Script (choose one)</h3>
+          <div className={styles.row}>
+            {scripts.map((it, idx) => (
+              <OptionCard
+                key={idx}
+                title={`Script Option ${idx+1}`}
+                value={it.script}
+                onChange={(v)=>{ const arr=[...scripts]; arr[idx]={ script:v }; setScripts(arr); }}
+                onChoose={() => setChosenScriptIdx(idx)}
+                chosen={chosenScriptIdx === idx}
+              />
+            ))}
+          </div>
+          <div className={styles.footer}>
+            <button className={styles.secondary} onClick={()=>setScripts([])}>Reset scripts</button>
+            <button className={styles.primary} onClick={onBuildDeck} disabled={busy || chosenScriptIdx==null}>
+              Build Deck JSON
+            </button>
+          </div>
+        </>
+      )}
+
+      {deckJson && (
+        <>
+          <h3 style={{margin:"14px 0 8px"}}>Deck JSON (editable before export)</h3>
+          <div className={styles.panel}>
+            <textarea
+              className={styles.textarea}
+              style={{minHeight: 220}}
+              value={JSON.stringify(deckJson, null, 2)}
+              onChange={(e)=> { try { setDeckJson(JSON.parse(e.target.value)); } catch {} }}
+            />
+            <div className={styles.footer}>
+              <button className={styles.secondary} onClick={()=>onExport("docx")} disabled={busy}>Export Docx</button>
+              <button className={styles.primary} onClick={()=>onExport("pdf")} disabled={busy}>Export PDF</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {error && <div style={{marginTop:12, color:"#ffb4b4"}}>{error}</div>}
+    </div>
   );
 }
 
