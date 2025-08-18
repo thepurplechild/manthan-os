@@ -6,19 +6,22 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# (optional) system updates; keep image small
-RUN pip install --no-cache-dir --upgrade pip
+# (Optional) Small sys deps you may need later for exports
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential libmagic1 \
+ && rm -rf /var/lib/apt/lists/*
 
-# ---- deps layer (works because build context is apps/api) ----
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+# Copy requirements FIRST for better layer caching
+COPY apps/api/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-# ---- app code ----
-COPY . /app
+# Copy backend source
+COPY apps/api /app
 
-# Cloud Run injects $PORT
+EXPOSE 8080
 ENV PORT=8080
 
-# FastAPI via uvicorn
+# Cloud Run expects the container to listen on $PORT
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+
 
