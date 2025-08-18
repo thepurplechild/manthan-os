@@ -5,6 +5,8 @@ import styles from "./TopNav.module.css";
 import { getAuthStrict } from "../../src/lib/firebase"; // your path is apps/web/src/lib/firebase.ts
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { signInWithGoogle, signOut } from "../../src/lib/firebase";
+import BrandLockup from "../Brand/BrandLockup";
+
 
 export default function TopNav(){
   const [user,setUser]=useState<User|null>(null);
@@ -24,10 +26,15 @@ export default function TopNav(){
   return (
     <header className={styles.wrapper}>
       <div className={styles.nav}>
-        <Link href="/" className={styles.brand}>
-          <img src="/brand-mark.svg" alt="Manthan" className={styles.logo}/>
-          <span className={styles.wordmark}>Manthan Studio</span>
-        </Link>
+        - <Link href="/" className={styles.brand}>
+-   <img src="/brand-mark.svg" alt="ManthanOS" className={styles.logo}/>
+-   <span className={styles.wordmark}>ManthanOS</span>
+- </Link>
++ <Link href="/" className={styles.brand}>
++   <div style={{display:"flex", alignItems:"center", gap:10}}>
++     <BrandLockup size="nav" />
++   </div>
++ </Link>
 
         <nav className={styles.links}>
           <Link href="/guided" className={styles.link}>Guided</Link>
