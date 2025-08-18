@@ -1,7 +1,24 @@
+# apps/api/Dockerfile
 FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
 WORKDIR /app
-COPY requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
+
+# (optional) system updates; keep image small
+RUN pip install --no-cache-dir --upgrade pip
+
+# ---- deps layer (works because build context is apps/api) ----
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# ---- app code ----
+COPY . /app
+
+# Cloud Run injects $PORT
 ENV PORT=8080
+
+# FastAPI via uvicorn
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+
