@@ -1,0 +1,25 @@
+.wrapper{
+  position:fixed; top:0; left:0; right:0; z-index:50;
+  backdrop-filter: saturate(140%) blur(8px);
+  background:linear-gradient(180deg, rgba(12,12,18,.7), rgba(12,12,18,.35));
+  border-bottom:1px solid var(--line);
+}
+.nav{
+  height:72px; display:flex; align-items:center; justify-content:space-between;
+  max-width:1200px; margin:0 auto; padding:0 18px;
+}
+.brand{display:flex; gap:10px; align-items:center; font-weight:800; letter-spacing:.2px}
+.logo{width:28px; height:28px}
+.wordmark{font-size:16px}
+.links{display:flex; gap:16px}
+.link{color:var(--muted); padding:8px 10px; border-radius:10px; border:1px solid transparent}
+.link:hover{color:var(--ink); border-color:rgba(255,255,255,.12)}
+.actions{display:flex; align-items:center; gap:10px}
+.userBox{display:flex; align-items:center; gap:10px}
+.avatar{width:28px; height:28px; border-radius:50%; border:1px solid rgba(255,255,255,.15)}
+.avatarFallback{width:28px; height:28px; border-radius:50%; background:var(--panel); display:flex; align-items:center; justify-content:center; font-weight:700}
+.userName{color:var(--muted); font-size:12px}
+@media (max-width:720px){
+  .links{display:none}
+  .userName{display:none}
+}
