@@ -1,6 +1,3 @@
-# infra/cloudbuild-frontend.yaml
-# Build Next.js (apps/web) with Dockerfile and deploy to Cloud Run in asia-south1
-
 substitutions:
   _REGION: asia-south1
   _SERVICE: manthan-frontend
@@ -12,6 +9,7 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
+  # 1) Build the image
   - name: gcr.io/cloud-builders/docker
     args:
       - build
@@ -21,10 +19,13 @@ steps:
       - apps/web/Dockerfile
       - .
 
-  # Push is handled automatically by 'images:' below, but this also works:
-  # - name: gcr.io/cloud-builders/docker
-  #   args: ['push', '${_IMAGE}:${_TAG}']
+  # 2) PUSH the image so Cloud Run can pull it right away
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_IMAGE}:${_TAG}
 
+  # 3) Deploy to Cloud Run
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
@@ -37,6 +38,7 @@ steps:
       - --allow-unauthenticated
       - --quiet
 
-images:
-  - ${_IMAGE}:${_TAG}
+# Omit the "images:" block so Cloud Build doesn't wait until the very end to push.
+# (We already pushed explicitly above.)
+
 
