@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
-import styles from "../../components/Wizard/Wizard.module.css";
-import OptionCard from "../../components/Wizard/OptionCard";
-import { GenAPI, OutlineOption, ScriptOption } from "../../lib/api";
+import styles from "../../src/components/Wizard/Wizard.module.css";
+import OptionCard from "../../src/components/Wizard/OptionCard";
+import { GenAPI, OutlineOption, ScriptOption } from "../../src/lib/api";
 
 export default function AcceleratedPage() {
   const [language, setLanguage] = useState("Hindi");
