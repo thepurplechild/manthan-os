@@ -15,3 +15,6 @@ steps:
 images:
   - ${_IMAGE}:${_TAG}
 
+options:
+  logging: CLOUD_LOGGING_ONLY 
+
