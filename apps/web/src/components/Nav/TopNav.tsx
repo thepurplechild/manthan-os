@@ -2,9 +2,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import styles from "./TopNav.module.css";
-import { getAuthStrict } from "../../src/lib/firebase"; // your path is apps/web/src/lib/firebase.ts
+import { getAuthStrict } from "../../lib/firebase";
 import { onAuthStateChanged, type User } from "firebase/auth";
-import { signInWithGoogle, signOut } from "../../src/lib/firebase";
+import { signInWithGoogle, signOut } from "../../lib/firebase";
 import BrandLockup from "../Brand/BrandLockup";
 
 
