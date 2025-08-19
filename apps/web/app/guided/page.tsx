@@ -1,9 +1,9 @@
 "use client";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import styles from "../../components/Wizard/Wizard.module.css";
-import OptionCard from "../../components/Wizard/OptionCard";
-import { GenAPI, IdeaOption, OutlineOption, ScriptOption, ProjectsAPI } from "../../lib/api";
+import styles from "../../src/components/Wizard/Wizard.module.css";
+import OptionCard from "../../src/components/Wizard/OptionCard";
+import { GenAPI, IdeaOption, OutlineOption, ScriptOption, ProjectsAPI } from "../../src/lib/api";
 import { requireUid } from "../../src/lib/firebase";
 
 type Step = 0 | 1 | 2 | 3 | 4; // Ideas, Outline, Script, Deck, Export
