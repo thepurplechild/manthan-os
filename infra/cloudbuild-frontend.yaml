@@ -1,5 +1,5 @@
 substitutions:
-  _IMAGE: gcr.io/$PROJECT_ID/manthan-frontend
+  _IMAGE: gcr.io/${PROJECT_ID}/manthan-frontend
   _TAG: latest
 
 steps:
@@ -16,5 +16,4 @@ images:
   - ${_IMAGE}:${_TAG}
 
 options:
-  logging: CLOUD_LOGGING_ONLY 
-
+  logging: CLOUD_LOGGING_ONLY
