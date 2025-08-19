@@ -4,7 +4,7 @@ export const fetchCache = "force-no-store";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import BrandLockup from "../components/Brand/BrandLockup";
+import BrandLockup from "../src/components/Brand/BrandLockup";
 import {
   signInWithGoogle,
   sendEmailLink,
