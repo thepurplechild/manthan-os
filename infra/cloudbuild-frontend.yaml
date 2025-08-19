@@ -1,14 +1,15 @@
 # infra/cloudbuild-frontend.yaml
-# Builds the Next.js frontend (apps/web) with the Dockerfile and deploys to Cloud Run.
+# Build Next.js (apps/web) with Dockerfile and deploy to Cloud Run in asia-south1
 
 substitutions:
   _REGION: asia-south1
   _SERVICE: manthan-frontend
-  _IMAGE: gcr.io/${PROJECT_ID}/manthan-frontend
+  _REPO: manthan
+  _IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/manthan-frontend
   _TAG: latest
 
 options:
-  logging: CLOUD_LOGGING_ONLY   # <-- satisfies the service account + logs requirement
+  logging: CLOUD_LOGGING_ONLY
 
 steps:
   - name: gcr.io/cloud-builders/docker
@@ -17,10 +18,13 @@ steps:
       - -t
       - ${_IMAGE}:${_TAG}
       - -f
-      - apps/web/Dockerfile     # Dockerfile lives here
-      - .                       # build context is the repo root
+      - apps/web/Dockerfile
+      - .
 
-  # Optional: auto-deploy to Cloud Run after image build
+  # Push is handled automatically by 'images:' below, but this also works:
+  # - name: gcr.io/cloud-builders/docker
+  #   args: ['push', '${_IMAGE}:${_TAG}']
+
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
@@ -36,7 +40,3 @@ steps:
 images:
   - ${_IMAGE}:${_TAG}
 
-# Optional: extend build time or machine
-# timeout: "2400s"
-# options:
-#   machineType: "E2_HIGHCPU_8"
