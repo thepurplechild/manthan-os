@@ -1,19 +1,21 @@
-:root{
-  --bg:#0b0b0f; --panel:#12121a; --ink:#f2f2f5; --muted:#a8a8b3;
-  --line:rgba(255,255,255,.08); --glass:rgba(17,17,25,.65);
-  --accent:#9a7cff; --accent2:#7dd3fc; --radius:14px;
+/* ---- Global design tokens ---- */
+:root {
+  --bg: #0b0b0f;
+  --panel: #12121a;
+  --ink: #f2f2f5;
+  --muted: #a8a8b3;
+
+  --accent: #9a7cff;
+  --accent-2: #7dd3fc;
+
+  --radius: 14px;
+
+  /* brand */
+  --brand-ink: #f2f2f5;
+  --brand-accent1: #9a7cff;
+  --brand-accent2: #7dd3fc;
 }
 
-*{box-sizing:border-box}
-html,body{height:100%}
-body{
-  margin:0; color:var(--ink); background: radial-gradient(1200px 600px at 70% -10%, rgba(154,124,255,.08), transparent 60%),
-                                 radial-gradient(900px 500px at 10% -20%, rgba(125,211,252,.06), transparent 60%),
-                                 var(--bg);
-}
-
-/* make space for sticky nav */
-main{padding-top:72px}
 
 /* utility buttons (used by nav) */
 .btn{border-radius:10px; padding:9px 12px; cursor:pointer; font-weight:600; border:1px solid var(--line); background:transparent; color:var(--ink)}
