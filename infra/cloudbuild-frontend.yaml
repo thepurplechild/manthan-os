@@ -1,6 +1,3 @@
-# infra/cloudbuild-frontend.yaml
-# Builds the Docker image using infra/Dockerfile.frontend and pushes it
-
 substitutions:
   _IMAGE: gcr.io/$PROJECT_ID/manthan-frontend
   _TAG: latest
@@ -12,8 +9,9 @@ steps:
       - -t
       - ${_IMAGE}:${_TAG}
       - -f
-      - infra/Dockerfile.frontend
+      - apps/web/Dockerfile
       - .
 
 images:
   - ${_IMAGE}:${_TAG}
+
