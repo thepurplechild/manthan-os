@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
-import styles from "../../components/Wizard/Wizard.module.css";
-import { ProjectsAPI } from "../../lib/api";
-import { requireUid } from "../../lib/firebase";
+
+import styles from "../../src/components/Wizard/Wizard.module.css";
+import { ProjectsAPI } from "../../src/lib/api";
+import { requireUid } from "../../src/lib/firebase";
+
 import Link from "next/link";
 
 export default function ProjectsPage() {
