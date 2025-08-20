@@ -1,12 +1,38 @@
-- name: gcr.io/cloud-builders/docker
-  args: ["build","-t","${_IMAGE}:${_TAG}","-f","apps/web/Dockerfile","."]
-- name: gcr.io/cloud-builders/docker
-  args: ["push","${_IMAGE}:${_TAG}"]
-- name: gcr.io/google.com/cloudsdktool/cloud-sdk
-  entrypoint: gcloud
-  args: ["run","deploy","${_SERVICE}","--image=${_IMAGE}:${_TAG}","--region=${_REGION}","--platform=managed","--allow-unauthenticated","--quiet"]
+# infra/cloudbuild-frontend.yaml
+serviceAccount: projects/project-manthan-468609/serviceAccounts/524579286496@cloudbuild.gserviceaccount.com
+
+substitutions:
+  _REGION: asia-south1
+  _SERVICE: manthan-frontend
+  _REPO: manthan
+  _IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/manthan-frontend
+  _TAG: latest
+
 options:
   logging: CLOUD_LOGGING_ONLY
 
-
+steps:
+- name: gcr.io/cloud-builders/docker
+  args:
+  - build
+  - -t
+  - ${_IMAGE}:${_TAG}
+  - -f
+  - apps/web/Dockerfile
+  - .
+- name: gcr.io/cloud-builders/docker
+  args:
+  - push
+  - ${_IMAGE}:${_TAG}
+- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  entrypoint: gcloud
+  args:
+  - run
+  - deploy
+  - ${_SERVICE}
+  - --image=${_IMAGE}:${_TAG}
+  - --region=${_REGION}
+  - --platform=managed
+  - --allow-unauthenticated
+  - --quiet
 
