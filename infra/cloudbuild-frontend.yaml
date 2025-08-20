@@ -1,44 +1,12 @@
-substitutions:
-  _REGION: asia-south1
-  _SERVICE: manthan-frontend
-  _REPO: manthan
-  _IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/manthan-frontend
-  _TAG: latest
-
+- name: gcr.io/cloud-builders/docker
+  args: ["build","-t","${_IMAGE}:${_TAG}","-f","apps/web/Dockerfile","."]
+- name: gcr.io/cloud-builders/docker
+  args: ["push","${_IMAGE}:${_TAG}"]
+- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  entrypoint: gcloud
+  args: ["run","deploy","${_SERVICE}","--image=${_IMAGE}:${_TAG}","--region=${_REGION}","--platform=managed","--allow-unauthenticated","--quiet"]
 options:
   logging: CLOUD_LOGGING_ONLY
 
-steps:
-  # 1) Build the image
-  - name: gcr.io/cloud-builders/docker
-    args:
-      - build
-      - -t
-      - ${_IMAGE}:${_TAG}
-      - -f
-      - apps/web/Dockerfile
-      - .
-
-  # 2) PUSH the image so Cloud Run can pull it right away
-  - name: gcr.io/cloud-builders/docker
-    args:
-      - push
-      - ${_IMAGE}:${_TAG}
-
-  # 3) Deploy to Cloud Run
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - ${_SERVICE}
-      - --image=${_IMAGE}:${_TAG}
-      - --region=${_REGION}
-      - --platform=managed
-      - --allow-unauthenticated
-      - --quiet
-
-# Omit the "images:" block so Cloud Build doesn't wait until the very end to push.
-# (We already pushed explicitly above.)
 
 
