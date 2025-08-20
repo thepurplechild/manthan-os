@@ -1,9 +1,18 @@
-<svg width="64" height="64" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" fill="none">
-  <rect width="256" height="256" rx="56" fill="url(#g)"/>
-  <path d="M64 176c0-56 24-96 64-96s64 40 64 96" stroke="white" stroke-width="12" stroke-linecap="round"/>
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ManthanOS">
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#6A5AE0"/><stop offset="1" stop-color="#0EA5E9"/>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#9A7CFF"/>
+      <stop offset="1" stop-color="#7DD3FC"/>
     </linearGradient>
   </defs>
+  <rect x="20" y="20" width="216" height="216" rx="44" fill="url(#g)" opacity=".12"/>
+  <!-- M -->
+  <path fill="url(#g)" d="M48 188V68h24l32 36 32-36h24v120h-24v-64l-32 32h-2l-32-32v64H48Z"/>
+  <!-- dot -->
+  <circle cx="176" cy="88" r="6" fill="url(#g)"/>
+  <!-- O (ring) -->
+  <circle cx="196" cy="128" r="28" fill="none" stroke="url(#g)" stroke-width="14"/>
+  <!-- S strokes -->
+  <path d="M214 106c8-8 20-8 28 0" stroke="url(#g)" stroke-width="12" stroke-linecap="round" fill="none"/>
+  <path d="M214 150c8 8 20 8 28 0" stroke="url(#g)" stroke-width="12" stroke-linecap="round" fill="none"/>
 </svg>
