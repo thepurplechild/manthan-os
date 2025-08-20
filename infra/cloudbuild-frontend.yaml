@@ -1,8 +1,4 @@
 # infra/cloudbuild-frontend.yaml
-# Build + push + deploy the Next.js frontend (apps/web) to Cloud Run (asia-south1).
-
-# Use the Cloud Build SA directly from YAML (you can also set this in the trigger UI)
-serviceAccount: projects/project-manthan-468609/serviceAccounts/524579286496@cloudbuild.gserviceaccount.com
 
 substitutions:
   _REGION: asia-south1
@@ -10,45 +6,51 @@ substitutions:
   _REPO: manthan
   _IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/manthan-frontend
   _TAG: latest
-  # ⬇️ Set this to your backend Cloud Run URL (optional but recommended)
-  # Example: https://manthan-backend-xxxx-asia-south1.a.run.app
-  _API_BASE: https://manthan-backend-524579286496.asia-south1.run.app
+  # Set this to your backend URL if you want it baked in at build time
+  _API_BASE: https://YOUR-BACKEND-URL-HERE
 
 options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
-# 1) Build image from apps/web/Dockerfile (passes API base through as build-arg)
+# 0) Preflight: prove the repo and Dockerfile are present in the workspace
+- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  entrypoint: bash
+  args:
+    - -lc
+    - |
+      set -eux
+      echo "HEAD: $(git rev-parse --short HEAD 2>/dev/null || true)"
+      test -f infra/cloudbuild-frontend.yaml || { echo "YAML not found"; exit 1; }
+      test -f apps/web/Dockerfile || { echo "apps/web/Dockerfile missing"; exit 1; }
+      echo "----- apps/web/Dockerfile (first 40 lines) -----"
+      sed -n '1,40p' apps/web/Dockerfile || true
+
+# 1) Build the Next.js image (point at the Dockerfile in apps/web)
 - name: gcr.io/cloud-builders/docker
   args:
-  - build
-  - -t
-  - ${_IMAGE}:${_TAG}
-  - -f
-  - apps/web/Dockerfile
-  - --build-arg
-  - NEXT_PUBLIC_API_BASE=${_API_BASE}
-  - .
+    - build
+    - -t
+    - ${_IMAGE}:${_TAG}
+    - -f
+    - apps/web/Dockerfile
+    - --build-arg
+    - NEXT_PUBLIC_API_BASE=${_API_BASE}
+    - .
 
-# 2) Push image BEFORE deploy so Cloud Run can pull it immediately
+# 2) Push the image so Cloud Run can pull it
 - name: gcr.io/cloud-builders/docker
-  args:
-  - push
-  - ${_IMAGE}:${_TAG}
+  args: ["push", "${_IMAGE}:${_TAG}"]
 
-# 3) Deploy to Cloud Run (frontend service)
+# 3) Deploy to Cloud Run
 - name: gcr.io/google.com/cloudsdktool/cloud-sdk
   entrypoint: gcloud
   args:
-  - run
-  - deploy
-  - ${_SERVICE}
-  - --image=${_IMAGE}:${_TAG}
-  - --region=${_REGION}
-  - --platform=managed
-  - --allow-unauthenticated
-  - --quiet
-
-# (No "images:" section — we push explicitly above.)
-
-
+    - run
+    - deploy
+    - ${_SERVICE}
+    - --image=${_IMAGE}:${_TAG}
+    - --region=${_REGION}
+    - --platform=managed
+    - --allow-unauthenticated
+    - --quiet
