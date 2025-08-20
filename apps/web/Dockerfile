@@ -2,6 +2,10 @@
 # Build Next.js (App Router) with npm and ship the standalone output.
 
 # ---------- 1) BUILD ----------
+# at the top of the builder stage
+ARG NEXT_PUBLIC_API_BASE=""
+ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
+
 FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 
