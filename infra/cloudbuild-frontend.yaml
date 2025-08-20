@@ -7,7 +7,7 @@ substitutions:
   _IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/manthan-frontend
   _TAG: latest
   # Set this to your backend URL if you want it baked in at build time
-  _API_BASE: https://YOUR-BACKEND-URL-HERE
+  _API_BASE: https://manthan-backend-524579286496.asia-south1.run.app/
 
 options:
   logging: CLOUD_LOGGING_ONLY
