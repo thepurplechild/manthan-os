@@ -15,27 +15,31 @@ COPY . .
 ENV NODE_ENV=production
 RUN bash -lc 'cd apps/web && npm run build'
 
-# Guard: ensure Next produced the standalone entry we plan to run
-RUN test -f /app/apps/web/.next/standalone/apps/web/server.js || (echo "❌ Missing apps/web/server.js in standalone output" && ls -la /app/apps/web/.next/standalone/apps/web && exit 1)
-
 # ---------- 2) RUNTIME ----------
-# Use non-distroless Node for predictable startup and easier debugging
+# Use non-distroless for predictable startup & easy debugging
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=8080
-# Ensure Next binds to all interfaces on Cloud Run
 ENV HOST=0.0.0.0
 ENV HOSTNAME=0.0.0.0
 ENV NEXT_TELEMETRY_DISABLED=1
-
 EXPOSE 8080
 
-# Copy standalone server + assets
+# Copy Next standalone bundle
 COPY --from=builder /app/apps/web/.next/standalone ./
+
+# Copy static assets to BOTH likely locations (root and nested), so whichever
+# server.js we get (root ./server.js OR ./apps/web/server.js) can find them.
+COPY --from=builder /app/apps/web/.next/static ./.next/static
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+
+# Copy public to BOTH likely locations as well
+COPY --from=builder /app/apps/web/public ./public
 COPY --from=builder /app/apps/web/public ./apps/web/public
 
-# Start Next's standalone server explicitly with node
-CMD ["node", "apps/web/server.js"]
+# Start whichever entry exists (root or nested)
+# - If ./server.js exists, use it
+# - else fall back to ./apps/web/server.js
+CMD [ "bash", "-lc", "if [ -f server.js ]; then exec node server.js; else exec node apps/web/server.js; fi" ]
