@@ -1,55 +1,40 @@
 # infra/cloudbuild-backend.yaml
-# Cloud Build → builds + deploys the FastAPI backend to Cloud Run (Phase 1)
+serviceAccount: projects/project-manthan-468609/serviceAccounts/524579286496@cloudbuild.gserviceaccount.com
+
+substitutions:
+  _REGION: asia-south1
+  _REPO: manthan
+  _SERVICE: manthan-backend
+  _IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}
+  _TAG: latest
+  # Adjust this to your actual frontend Cloud Run URL (or custom domain if set up)
+  _ALLOWED_ORIGIN: https://manthan-frontend-asia-south1.run.app
 
 options:
   logging: CLOUD_LOGGING_ONLY
 
-substitutions:
-  _REGION: asia-south1
-  _REPO: manthan-repo
-  _SERVICE: manthan-backend
-  # Frontend URL (adjust if your actual Cloud Run URL differs)
-  _ALLOWED_ORIGIN: https://manthan-frontend-asia-south1.run.app
-
 steps:
-  # 1) Build image from monorepo root using the backend Dockerfile
-  - name: gcr.io/cloud-builders/docker
-    args:
-      - build
-      - -f
-      - apps/api/Dockerfile
-      - -t
-      - $_REGION-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
-      - -t
-      - $_REGION-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
-      - .
+- name: gcr.io/cloud-builders/docker
+  args: ["build","-t","${_IMAGE}:${_TAG}","-f","apps/api/Dockerfile","."]
+- name: gcr.io/cloud-builders/docker
+  args: ["push","${_IMAGE}:${_TAG}"]
+- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  entrypoint: gcloud
+  args:
+  - run
+  - deploy
+  - ${_SERVICE}
+  - --image=${_IMAGE}:${_TAG}
+  - --region=${_REGION}
+  - --platform=managed
+  - --allow-unauthenticated
+  - --port=8080
+  - --cpu=1
+  - --memory=512Mi
+  - --max-instances=3
+  - --set-env-vars=ALLOWED_ORIGIN=${_ALLOWED_ORIGIN}
+  - --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest
 
-  # 2) Push tags
-  - name: gcr.io/cloud-builders/docker
-    args: ["push", "$_REGION-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA"]
-  - name: gcr.io/cloud-builders/docker
-    args: ["push", "$_REGION-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest"]
-
-  # 3) Deploy to Cloud Run
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - ${_SERVICE}
-      - --image=$_REGION-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
-      - --region=${_REGION}
-      - --platform=managed
-      - --allow-unauthenticated
-      - --port=8080
-      - --cpu=1
-      - --memory=512Mi
-      - --max-instances=3
-      - --set-env-vars=ALLOWED_ORIGIN=${_ALLOWED_ORIGIN}
-      - --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest
-
-images:
-  - $_REGION-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
 
 
 
