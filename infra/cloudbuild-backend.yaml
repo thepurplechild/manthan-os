@@ -1,23 +1,41 @@
 # infra/cloudbuild-backend.yaml
+# Build + push + deploy the FastAPI backend (apps/api) to Cloud Run (asia-south1).
+
+# Pin the Cloud Build SA used by this trigger (or set it in the trigger UI)
 serviceAccount: projects/project-manthan-468609/serviceAccounts/524579286496@cloudbuild.gserviceaccount.com
 
 substitutions:
   _REGION: asia-south1
-  _REPO: manthan
   _SERVICE: manthan-backend
+  _REPO: manthan
   _IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}
   _TAG: latest
-  # Adjust this to your actual frontend Cloud Run URL (or custom domain if set up)
-  _ALLOWED_ORIGIN: https://manthan-frontend-asia-south1.run.app
+
+  # Frontend origin to allow CORS from (update to your real FE URL)
+  # Example: https://manthan-frontend-xxxx-asia-south1.a.run.app  OR your custom domain
+  _ALLOWED_ORIGIN: https://manthan-frontend-524579286496.asia-south1.run.app
 
 options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
+# 1) Build the backend image with the repo root as context
 - name: gcr.io/cloud-builders/docker
-  args: ["build","-t","${_IMAGE}:${_TAG}","-f","apps/api/Dockerfile","."]
+  args:
+  - build
+  - -t
+  - ${_IMAGE}:${_TAG}
+  - -f
+  - apps/api/Dockerfile
+  - .
+
+# 2) Push BEFORE deploy so Cloud Run can pull immediately
 - name: gcr.io/cloud-builders/docker
-  args: ["push","${_IMAGE}:${_TAG}"]
+  args:
+  - push
+  - ${_IMAGE}:${_TAG}
+
+# 3) Deploy to Cloud Run
 - name: gcr.io/google.com/cloudsdktool/cloud-sdk
   entrypoint: gcloud
   args:
@@ -29,11 +47,10 @@ steps:
   - --platform=managed
   - --allow-unauthenticated
   - --port=8080
-  - --cpu=1
-  - --memory=512Mi
-  - --max-instances=3
-  - --set-env-vars=ALLOWED_ORIGIN=${_ALLOWED_ORIGIN}
-  - --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest
+  # env vars your FastAPI reads in apps/api/main.py
+  - --set-env-vars=ALLOWED_ORIGIN=${_ALLOWED_ORIGIN},GCP_PROJECT_ID=project-manthan-468609,GCS_BUCKET=manthan-assets,FIRESTORE_NAMESPACE=prod,MODEL_NAME=gpt-5
+  # if you store OPENAI_API_KEY in Secret Manager, uncomment the next line and ensure the secret exists
+  # - --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest
 
 
 
