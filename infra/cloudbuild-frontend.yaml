@@ -1,4 +1,7 @@
 # infra/cloudbuild-frontend.yaml
+# Build + push + deploy the Next.js frontend (apps/web) to Cloud Run (asia-south1).
+
+# Use the Cloud Build SA directly from YAML (you can also set this in the trigger UI)
 serviceAccount: projects/project-manthan-468609/serviceAccounts/524579286496@cloudbuild.gserviceaccount.com
 
 substitutions:
@@ -7,11 +10,15 @@ substitutions:
   _REPO: manthan
   _IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/manthan-frontend
   _TAG: latest
+  # ⬇️ Set this to your backend Cloud Run URL (optional but recommended)
+  # Example: https://manthan-backend-xxxx-asia-south1.a.run.app
+  _API_BASE: https://manthan-backend-524579286496.asia-south1.run.app
 
 options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
+# 1) Build image from apps/web/Dockerfile (passes API base through as build-arg)
 - name: gcr.io/cloud-builders/docker
   args:
   - build
@@ -19,11 +26,17 @@ steps:
   - ${_IMAGE}:${_TAG}
   - -f
   - apps/web/Dockerfile
+  - --build-arg
+  - NEXT_PUBLIC_API_BASE=${_API_BASE}
   - .
+
+# 2) Push image BEFORE deploy so Cloud Run can pull it immediately
 - name: gcr.io/cloud-builders/docker
   args:
   - push
   - ${_IMAGE}:${_TAG}
+
+# 3) Deploy to Cloud Run (frontend service)
 - name: gcr.io/google.com/cloudsdktool/cloud-sdk
   entrypoint: gcloud
   args:
@@ -35,4 +48,7 @@ steps:
   - --platform=managed
   - --allow-unauthenticated
   - --quiet
+
+# (No "images:" section — we push explicitly above.)
+
 
