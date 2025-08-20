@@ -1,21 +1,32 @@
 "use client";
-import { useState } from "react";
-import styles from "./Wizard.module.css";
+import React from "react";
 
 export default function OptionCard({
-  title, value, onChange, onChoose, chosen,
-}: { title: string; value: string; onChange: (v: string)=>void; onChoose?: ()=>void; chosen?: boolean; }) {
-  const [local, setLocal] = useState(value);
+  title,
+  value,
+  onChange,
+  onChoose,
+  chosen,
+}: {
+  title: string;
+  value: string;
+  onChange: (v: string) => void;
+  onChoose: () => void;
+  chosen?: boolean;
+}) {
   return (
-    <div className={`${styles.card} ${chosen ? styles.cardChosen : ""}`}>
-      <div className={styles.cardHeader}>
-        <div className={styles.cardTitle}>{title}</div>
-        {onChoose && <button className={styles.primary} onClick={onChoose}>Choose</button>}
+    <div className="panel" style={{ padding: 16, position: "relative" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+        <strong>{title}</strong>
+        <button className="btn" onClick={onChoose} aria-pressed={chosen}>
+          {chosen ? "Chosen ✓" : "Choose"}
+        </button>
       </div>
       <textarea
-        className={styles.textarea}
-        value={local}
-        onChange={(e)=>{ setLocal(e.target.value); onChange(e.target.value); }}
+        className="textarea"
+        style={{ marginTop: 12, minHeight: 160 }}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
       />
     </div>
   );
