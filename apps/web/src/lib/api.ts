@@ -6,9 +6,9 @@
  * - GenAPI: calls the backend (Cloud Run) for generation/export
  * - ProjectsAPI: browser-safe localStorage stub (so pages compile/run without server storage)
  *
- * NOTE:
+ * Notes
  * - Backend base URL is retrieved at runtime from /api/app-config (populated via Cloud Run env).
- * - ProjectsAPI is deliberately no-op on the server (SSR); it only works in the browser.
+ * - ProjectsAPI returns shapes that match existing pages (array and { projects } both supported).
  */
 
 /* =================== Types =================== */
@@ -81,7 +81,7 @@ export const GenAPI = {
 
 /* =================== ProjectsAPI (browser localStorage stub) =================== */
 
-type ProjectIndexItem = { project_id: string; title: string; updatedAt: number };
+export type ProjectIndexItem = { project_id: string; title: string; updatedAt: number };
 type StepName = "ideas" | "outline" | "script" | "deck";
 type ProjectSteps = {
   ideas?: { options: IdeaOption[]; chosen: number | null; meta?: any };
@@ -90,7 +90,7 @@ type ProjectSteps = {
   deck?: { deckJson: any };
 };
 
-type ProjectDoc = {
+export type ProjectDoc = {
   meta: { title: string; createdAt: number; updatedAt: number };
   steps: ProjectSteps;
 };
@@ -140,8 +140,18 @@ function newId(): string {
 }
 
 export const ProjectsAPI = {
-  async list(uid: string): Promise<ProjectIndexItem[]> {
-    return readIndex(uid);
+  /**
+   * Returns an Array that ALSO has a `.projects` property so both of these work:
+   *   const arr = await ProjectsAPI.list(uid)
+   *   const { projects } = await ProjectsAPI.list(uid)
+   */
+  async list(
+    uid: string
+  ): Promise<ProjectIndexItem[] & { projects: ProjectIndexItem[] }> {
+    const arr = readIndex(uid);
+    // Make a hybrid so callers can use either pattern
+    const hybrid = Object.assign([...arr], { projects: arr });
+    return hybrid as ProjectIndexItem[] & { projects: ProjectIndexItem[] };
   },
 
   async create(uid: string, title: string): Promise<{ project_id: string }> {
