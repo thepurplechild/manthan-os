@@ -1,213 +1,235 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import OptionCard from "../../src/components/Wizard/OptionCard";
-import { GenAPI, IdeaOption, OutlineOption, ScriptOption, ProjectsAPI } from "../../src/lib/api";
-import { requireUid } from "../../src/lib/firebase";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import styles from "../../src/components/Wizard/Wizard.module.css";
+import { GenAPI } from "../../src/lib/api";
 
-type Step = 0 | 1 | 2 | 3 | 4;
+type Step = 0 | 1 | 2 | 3 | 4; // Ideas, Outline, Script, Deck, Export
+type Idea = { logline: string; premise: string };
+type Outline = { outline: string };
+type Script = { script: string };
 
-export default function GuidedPage({ searchParams }: { searchParams: { pid?: string } }) {
+function GuidedInner() {
+  const qs = useSearchParams();
+
   const [step, setStep] = useState<Step>(0);
-
   const [genre, setGenre] = useState("thriller");
-  const [language, setLanguage] = useState("English");
+  const [language, setLanguage] = useState("Hindi");
   const [tone, setTone] = useState("gritty");
   const [seed, setSeed] = useState("");
 
-  const [ideas, setIdeas] = useState<IdeaOption[]>([]);
-  const [chosenIdeaIdx, setChosenIdeaIdx] = useState<number | null>(null);
+  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [chosenIdea, setChosenIdea] = useState<number | null>(null);
 
-  const [outlines, setOutlines] = useState<OutlineOption[]>([]);
-  const [chosenOutlineIdx, setChosenOutlineIdx] = useState<number | null>(null);
+  const [outlines, setOutlines] = useState<Outline[]>([]);
+  const [chosenOutline, setChosenOutline] = useState<number | null>(null);
 
-  const [scripts, setScripts] = useState<ScriptOption[]>([]);
-  const [chosenScriptIdx, setChosenScriptIdx] = useState<number | null>(null);
+  const [scripts, setScripts] = useState<Script[]>([]);
+  const [chosenScript, setChosenScript] = useState<number | null>(null);
 
   const [deckJson, setDeckJson] = useState<any | null>(null);
 
-  const [projectId, setProjectId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Restore project if pid is present
-    (async () => {
-      const pid = searchParams?.pid;
-      if (!pid) return;
-      try {
-        const uid = await requireUid();
-        const data = await ProjectsAPI.get(uid, pid);
-        setProjectId(pid);
-        const s = data.steps || {};
-        if (s.ideas) { setIdeas(s.ideas.options || []); setChosenIdeaIdx(s.ideas.chosen ?? null); }
-        if (s.outline) { setOutlines(s.outline.options || []); setChosenOutlineIdx(s.outline.chosen ?? null); }
-        if (s.script) { setScripts(s.script.options || []); setChosenScriptIdx(s.script.chosen ?? null); }
-        if (s.deck) { setDeckJson(s.deck.deckJson || null); }
-      } catch { /* ignore */ }
-    })();
-  }, [searchParams?.pid]);
-
-  function toastErr(e: any) {
+  function toast(e: any) {
     console.error(e);
-    setError(e?.message || "Something went wrong");
-    setTimeout(() => setError(null), 3000);
+    setErr(typeof e === "string" ? e : e?.message || "Something went wrong");
+    setTimeout(() => setErr(null), 3200);
   }
 
-  async function ensureProject() {
-    const uid = await requireUid();
-    if (projectId) return { uid, pid: projectId };
-    const created = await ProjectsAPI.create(uid, "Guided Project");
-    setProjectId(created.project_id);
-    history.replaceState(null, "", `/guided?pid=${created.project_id}`);
-    return { uid, pid: created.project_id };
-  }
-
+  // --- actions ---
   async function onGenIdeas() {
-    if (!seed.trim()) return toastErr(new Error("Enter a premise first."));
+    if (!seed.trim()) return toast("Please enter a premise/seed.");
     setBusy(true);
     try {
-      const { options } = await GenAPI.ideas({ genre, tone, seed, language });
-      // take first 3 for cleaner UI if more come back
-      const top3 = options.slice(0, 3).map(o => ({ ...o }));
-      setIdeas(top3); setChosenIdeaIdx(null); setStep(0);
-      const { uid, pid } = await ensureProject();
-      await ProjectsAPI.saveStep(uid, pid, "ideas", { options: top3, chosen: null, meta: { genre, tone, language, seed } });
-    } catch (e) { toastErr(e); } finally { setBusy(false); }
+      const r = await GenAPI.ideas({ genre, tone, seed, language });
+      // The backend may return {content} or structured {options}; normalize to 3 options
+      let options: Idea[] = [];
+      if (r?.options?.length) {
+        options = r.options.slice(0, 3);
+      } else if (r?.content) {
+        // naive split for now:
+        const chunks = r.content.split(/\n{2,}/).slice(0, 3);
+        options = chunks.map((c) => {
+          const m = c.match(/logline[:\-]\s*(.*)/i);
+          return { logline: m?.[1]?.trim() || c.slice(0, 120), premise: c.trim() };
+        });
+      }
+      if (!options.length) throw new Error("Model returned no ideas.");
+      setIdeas(options);
+      setChosenIdea(null);
+      setOutlines([]); setChosenOutline(null);
+      setScripts([]); setChosenScript(null);
+      setDeckJson(null);
+      setStep(0);
+    } catch (e) {
+      toast(e);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onGenOutlines() {
-    const idea = chosenIdeaIdx != null ? ideas[chosenIdeaIdx] : null;
-    if (!idea) return toastErr(new Error("Pick an idea first."));
+    const idea = chosenIdea != null ? ideas[chosenIdea] : null;
+    if (!idea) return toast("Choose one idea first.");
     setBusy(true);
     try {
-      const { options } = await GenAPI.outlines({
-        logline: idea.logline + "\n\n" + idea.premise,
+      const r = await GenAPI.outlines({
+        logline: `${idea.logline}\n\n${idea.premise}`,
         structure: "film",
-        style: "Commercial, character-led",
-        language
+        style: "Bollywood high-concept thriller",
+        language,
       });
-      const top3 = options.slice(0, 3);
-      setOutlines(top3); setChosenOutlineIdx(null); setStep(1);
-      const { uid, pid } = await ensureProject();
-      await ProjectsAPI.saveStep(uid, pid, "outline", { options: top3, chosen: null, input: idea });
-    } catch (e) { toastErr(e); } finally { setBusy(false); }
+      let options: Outline[] = [];
+      if (r?.options?.length) options = r.options.slice(0, 3);
+      else if ((r as any)?.content) {
+        const chunks = (r as any).content.split(/\n{2,}/).slice(0, 3);
+        options = chunks.map((t) => ({ outline: t.trim() }));
+      }
+      if (!options.length) throw new Error("Model returned no outlines.");
+      setOutlines(options);
+      setChosenOutline(null);
+      setScripts([]); setChosenScript(null);
+      setDeckJson(null);
+      setStep(1);
+    } catch (e) {
+      toast(e);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onGenScripts() {
-    const outline = chosenOutlineIdx != null ? outlines[chosenOutlineIdx] : null;
-    if (!outline) return toastErr(new Error("Pick an outline first."));
+    const o = chosenOutline != null ? outlines[chosenOutline] : null;
+    if (!o) return toast("Choose one outline first.");
     setBusy(true);
     try {
-      const { options } = await GenAPI.scripts({ outline: outline.outline, style: "cinematic, grounded", language });
-      const top3 = options.slice(0, 3);
-      setScripts(top3); setChosenScriptIdx(null); setStep(2);
-      const { uid, pid } = await ensureProject();
-      await ProjectsAPI.saveStep(uid, pid, "script", { options: top3, chosen: null, input: outline });
-    } catch (e) { toastErr(e); } finally { setBusy(false); }
+      const r = await GenAPI.scripts({
+        outline: o.outline,
+        style: "cinematic, grounded, commercial",
+        language,
+      });
+      let options: Script[] = [];
+      if (r?.options?.length) options = r.options.slice(0, 3);
+      else if ((r as any)?.content) {
+        const chunks = (r as any).content.split(/\n{2,}/).slice(0, 3);
+        options = chunks.map((t) => ({ script: t.trim() }));
+      }
+      if (!options.length) throw new Error("Model returned no script pages.");
+      setScripts(options);
+      setChosenScript(null);
+      setDeckJson(null);
+      setStep(2);
+    } catch (e) {
+      toast(e);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onBuildDeck() {
-    const idea = chosenIdeaIdx != null ? ideas[chosenIdeaIdx] : null;
-    const outline = chosenOutlineIdx != null ? outlines[chosenOutlineIdx] : null;
-    const script = chosenScriptIdx != null ? scripts[chosenScriptIdx] : null;
-    if (!idea || !outline || !script) return toastErr(new Error("Pick items in all steps."));
+    const i = chosenIdea != null ? ideas[chosenIdea] : null;
+    const o = chosenOutline != null ? outlines[chosenOutline] : null;
+    const s = chosenScript != null ? scripts[chosenScript] : null;
+    if (!i || !o || !s) return toast("Choose items in all previous steps.");
     setBusy(true);
     try {
-      const { options } = await GenAPI.deckBuild({
-        title: (idea.logline || "Untitled").slice(0, 60),
-        logline: idea.logline,
-        synopsis: idea.premise,
-        characters: outline.outline.slice(0, 800),
-        world: tone,
-        comps: "Comparable titles (IN market)",
-        toneboard: "Premium, cinematic",
-        language
+      const r = await GenAPI.deckBuild({
+        title: (i.logline || "Untitled").slice(0, 60),
+        logline: i.logline,
+        synopsis: i.premise,
+        characters: "Key characters:\n" + o.outline.slice(0, 800),
+        world: "World & tone:\n" + tone,
+        comps: "Comparable titles for Indian market",
+        toneboard: "Moody, premium, cinematic",
+        language,
       });
-      const built = options[0]?.deck || null;
-      setDeckJson(built); setStep(3);
-      const { uid, pid } = await ensureProject();
-      await ProjectsAPI.saveStep(uid, pid, "deck", { deckJson: built });
-    } catch (e) { toastErr(e); } finally { setBusy(false); }
+      const built = r?.options?.[0]?.deck ?? (r as any)?.deck ?? null;
+      if (!built) throw new Error("Model returned no deck JSON.");
+      setDeckJson(built);
+      setStep(3);
+    } catch (e) {
+      toast(e);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onExport(fmt: "pdf" | "docx") {
-    if (!deckJson) return toastErr(new Error("Build the deck first."));
+    if (!deckJson) return toast("Build the deck first.");
     setBusy(true);
     try {
       const { url } = await GenAPI.export({ deck_json: deckJson, format: fmt });
       window.open(url, "_blank");
       setStep(4);
-    } catch (e) { toastErr(e); } finally { setBusy(false); }
+    } catch (e) {
+      toast(e);
+    } finally {
+      setBusy(false);
+    }
   }
 
+  // UI
   return (
-    <div>
-      <h1>Creator Guided Path</h1>
-      <p className="kicker">From premise to presentation deck in 5 steps.</p>
+    <div className={styles.container}>
+      <div className={styles.hero}>
+        <div className={styles.title}>Creator Guided Path</div>
+        <div className={styles.subtitle}>From premise to presentation deck in 5 steps.</div>
+      </div>
 
-      <div className="stepper">
+      <div className={styles.stepper}>
         {["Ideas", "Outline", "Script", "Deck", "Export"].map((s, i) => (
-          <span key={s} className={`step ${i === step ? "active" : ""}`}>{s}</span>
+          <div key={s} className={`${styles.step} ${i === step ? styles.stepActive : ""}`}>
+            {s}
+          </div>
         ))}
       </div>
 
-      {/* Step 0: Premise */}
-      <section className="panel" style={{ padding: 18, marginBottom: 20 }}>
-        <h3>1. Enter Your Premise</h3>
-        <p className="kicker">Provide the core concept, then click Generate to see three options.</p>
-        <div className="row" style={{ marginTop: 12 }}>
-          <div className="panel" style={{ gridColumn: "span 12", background: "transparent", border: "none", boxShadow: "none" }}>
-            <input className="input" placeholder="Premise (e.g., a kind man with a short fuse…)"
-                   value={seed} onChange={(e) => setSeed(e.target.value)} />
-          </div>
-          <div style={{ gridColumn: "span 4" }}>
-            <select className="select" value={genre} onChange={(e) => setGenre(e.target.value)}>
-              <option>thriller</option><option>drama</option><option>romance</option><option>comedy</option>
-            </select>
-          </div>
-          <div style={{ gridColumn: "span 4" }}>
-            <select className="select" value={language} onChange={(e) => setLanguage(e.target.value)}>
-              <option>English</option><option>Hindi</option><option>Tamil</option><option>Telugu</option>
-            </select>
-          </div>
-          <div style={{ gridColumn: "span 4" }}>
-            <input className="input" placeholder="Tone (e.g., gritty)" value={tone} onChange={(e) => setTone(e.target.value)} />
-          </div>
+      {/* Step 0: Seed -> Ideas */}
+      <div className={styles.panel}>
+        <label className={styles.label}>1. Enter Your Premise</label>
+        <div className={styles.controls}>
+          <select value={genre} onChange={(e) => setGenre(e.target.value)} className={styles.secondary}>
+            <option>thriller</option><option>drama</option><option>romance</option><option>comedy</option>
+          </select>
+          <select value={language} onChange={(e) => setLanguage(e.target.value)} className={styles.secondary}>
+            <option>Hindi</option><option>English</option><option>Tamil</option><option>Telugu</option>
+          </select>
+          <input className={styles.secondary} placeholder="Tone (e.g., gritty)" value={tone} onChange={(e) => setTone(e.target.value)} />
         </div>
-        <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
-          <button className="btn primary" onClick={onGenIdeas} disabled={busy}>Generate Ideas</button>
+        <textarea className={styles.textarea} placeholder="Premise / seed" value={seed} onChange={(e) => setSeed(e.target.value)} />
+        <div className={styles.footer}>
+          <button className={styles.primary} onClick={onGenIdeas} disabled={busy}>Generate Ideas</button>
         </div>
-      </section>
+      </div>
 
       {/* Ideas */}
       {ideas.length > 0 && (
         <>
-          <h3>2. Pick & Edit Your Idea</h3>
-          <div className="row" style={{ marginTop: 12 }}>
+          <h3 className={styles.section}>2. Choose an idea</h3>
+          <div className={styles.cardGrid}>
             {ideas.map((it, idx) => (
-              <OptionCard
-                key={idx}
-                title={`Idea ${idx + 1}`}
-                value={`Logline: ${it.logline}\n\nPremise: ${it.premise}`}
-                onChange={(v) => {
-                  const [l, ...rest] = v.split("\n\nPremise:");
-                  const logline = l.replace(/^Logline:\s*/i, "").trim();
-                  const premise = (rest.join("Premise:") || "").trim();
-                  const next = [...ideas];
-                  next[idx] = { logline, premise };
-                  setIdeas(next);
-                }}
-                onChoose={() => setChosenIdeaIdx(idx)}
-                chosen={chosenIdeaIdx === idx}
-              />
+              <div key={idx} className={`${styles.card} ${chosenIdea === idx ? styles.cardChosen : ""}`}>
+                <div className={styles.cardTitle}>Idea {idx + 1}</div>
+                <textarea
+                  className={styles.cardText}
+                  value={`Logline: ${it.logline}\n\nPremise: ${it.premise}`}
+                  onChange={(e) => {
+                    const [l, ...rest] = e.target.value.split("\n\nPremise:");
+                    const logline = l.replace(/^Logline:\s*/i, "").trim();
+                    const premise = (rest.join("Premise:") || "").trim();
+                    const a = [...ideas]; a[idx] = { logline, premise }; setIdeas(a);
+                  }}
+                />
+                <button onClick={() => setChosenIdea(idx)} className={styles.choice}>Use this</button>
+              </div>
             ))}
           </div>
-          <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
-            <button className="btn" onClick={() => setIdeas([])}>Reset</button>
-            <button className="btn primary" onClick={onGenOutlines} disabled={busy || chosenIdeaIdx == null}>
-              Generate Outlines
-            </button>
+          <div className={styles.footer}>
+            <button className={styles.secondary} onClick={() => setIdeas([])}>Reset ideas</button>
+            <button className={styles.primary} onClick={onGenOutlines} disabled={busy || chosenIdea == null}>Generate Outlines</button>
           </div>
         </>
       )}
@@ -215,24 +237,25 @@ export default function GuidedPage({ searchParams }: { searchParams: { pid?: str
       {/* Outlines */}
       {outlines.length > 0 && (
         <>
-          <h3 style={{ marginTop: 24 }}>3. Pick & Edit Your Outline</h3>
-          <div className="row" style={{ marginTop: 12 }}>
+          <h3 className={styles.section}>3. Choose an outline</h3>
+          <div className={styles.cardGrid}>
             {outlines.map((it, idx) => (
-              <OptionCard
-                key={idx}
-                title={`Outline ${idx + 1}`}
-                value={it.outline}
-                onChange={(v) => { const next = [...outlines]; next[idx] = { outline: v }; setOutlines(next); }}
-                onChoose={() => setChosenOutlineIdx(idx)}
-                chosen={chosenOutlineIdx === idx}
-              />
+              <div key={idx} className={`${styles.card} ${chosenOutline === idx ? styles.cardChosen : ""}`}>
+                <div className={styles.cardTitle}>Outline {idx + 1}</div>
+                <textarea
+                  className={styles.cardText}
+                  value={it.outline}
+                  onChange={(e) => {
+                    const a = [...outlines]; a[idx] = { outline: e.target.value }; setOutlines(a);
+                  }}
+                />
+                <button onClick={() => setChosenOutline(idx)} className={styles.choice}>Use this</button>
+              </div>
             ))}
           </div>
-          <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
-            <button className="btn" onClick={() => setOutlines([])}>Reset</button>
-            <button className="btn primary" onClick={onGenScripts} disabled={busy || chosenOutlineIdx == null}>
-              Generate Script Pages
-            </button>
+          <div className={styles.footer}>
+            <button className={styles.secondary} onClick={() => setOutlines([])}>Reset outlines</button>
+            <button className={styles.primary} onClick={onGenScripts} disabled={busy || chosenOutline == null}>Generate Script Pages</button>
           </div>
         </>
       )}
@@ -240,44 +263,58 @@ export default function GuidedPage({ searchParams }: { searchParams: { pid?: str
       {/* Scripts */}
       {scripts.length > 0 && (
         <>
-          <h3 style={{ marginTop: 24 }}>4. Pick & Edit Script Pages</h3>
-          <div className="row" style={{ marginTop: 12 }}>
+          <h3 className={styles.section}>4. Choose a script sample</h3>
+          <div className={styles.cardGrid}>
             {scripts.map((it, idx) => (
-              <OptionCard
-                key={idx}
-                title={`Script ${idx + 1}`}
-                value={it.script}
-                onChange={(v) => { const next = [...scripts]; next[idx] = { script: v }; setScripts(next); }}
-                onChoose={() => setChosenScriptIdx(idx)}
-                chosen={chosenScriptIdx === idx}
-              />
+              <div key={idx} className={`${styles.card} ${chosenScript === idx ? styles.cardChosen : ""}`}>
+                <div className={styles.cardTitle}>Script {idx + 1}</div>
+                <textarea
+                  className={styles.cardText}
+                  value={it.script}
+                  onChange={(e) => { const a = [...scripts]; a[idx] = { script: e.target.value }; setScripts(a); }}
+                />
+                <button onClick={() => setChosenScript(idx)} className={styles.choice}>Use this</button>
+              </div>
             ))}
           </div>
-          <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
-            <button className="btn" onClick={() => setScripts([])}>Reset</button>
-            <button className="btn primary" onClick={onBuildDeck} disabled={busy || chosenScriptIdx == null}>
-              Build Deck JSON
-            </button>
+          <div className={styles.footer}>
+            <button className={styles.secondary} onClick={() => setScripts([])}>Reset scripts</button>
+            <button className={styles.primary} onClick={onBuildDeck} disabled={busy || chosenScript == null}>Build Deck JSON</button>
           </div>
         </>
       )}
 
       {/* Deck */}
       {deckJson && (
-        <section className="panel" style={{ padding: 16, marginTop: 24 }}>
-          <h3>5. Export</h3>
-          <p className="kicker">Deck JSON built. Export as PDF or DOCX.</p>
-          <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, background: "rgba(255,255,255,.04)", padding: 12, borderRadius: 10, overflow: "auto", maxHeight: 260 }}>
-            {JSON.stringify(deckJson, null, 2)}
-          </pre>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button className="btn" onClick={() => onExport("docx")} disabled={busy}>Export Docx</button>
-            <button className="btn primary" onClick={() => onExport("pdf")} disabled={busy}>Export PDF</button>
+        <>
+          <h3 className={styles.section}>5. Export</h3>
+          <div className={styles.panel}>
+            <textarea
+              className={styles.textarea}
+              style={{ minHeight: 220 }}
+              value={JSON.stringify(deckJson, null, 2)}
+              onChange={(e) => {
+                try { setDeckJson(JSON.parse(e.target.value)); } catch {}
+              }}
+            />
+            <div className={styles.footer}>
+              <button className={styles.secondary} onClick={() => onExport("docx")} disabled={busy}>Export Docx</button>
+              <button className={styles.primary} onClick={() => onExport("pdf")} disabled={busy}>Export PDF</button>
+            </div>
           </div>
-        </section>
+        </>
       )}
 
-      {error && <div style={{ marginTop: 12, color: "#ffb4b4" }}>{error}</div>}
+      {err && <div style={{ marginTop: 12, color: "#ffb4b4" }}>{err}</div>}
     </div>
   );
 }
+
+export default function GuidedPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 24 }}>Loading…</div>}>
+      <GuidedInner />
+    </Suspense>
+  );
+}
+
