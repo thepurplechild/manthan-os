@@ -1,58 +1,61 @@
 # infra/cloudbuild-frontend.yaml
+# Builds Next.js frontend with the Dockerfile above and deploys to Cloud Run.
 
 substitutions:
-  _REGION: asia-south1
-  _SERVICE: manthan-frontend
-  _REPO: manthan
-  _IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/manthan-frontend
-  _TAG: latest
-  # Set this to your backend URL if you want it baked in at build time
-  _API_BASE: https://manthan-backend-524579286496.asia-south1.run.app/
+  # set to your values or override in the trigger UI
+  _LOCATION: "asia-south1"
+  _REPO: "manthan"
+  _SERVICE: "manthan-frontend"
+  _NEXT_PUBLIC_API_BASE: "https://manthan-backend-asia-south1.run.app"
+
+images:
+  - ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+  - ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
 
 options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
-# 0) Preflight: prove the repo and Dockerfile are present in the workspace
-- name: gcr.io/google.com/cloudsdktool/cloud-sdk
-  entrypoint: bash
-  args:
-    - -lc
-    - |
-      set -eux
-      echo "HEAD: $(git rev-parse --short HEAD 2>/dev/null || true)"
-      test -f infra/cloudbuild-frontend.yaml || { echo "YAML not found"; exit 1; }
-      test -f apps/web/Dockerfile || { echo "apps/web/Dockerfile missing"; exit 1; }
-      echo "----- apps/web/Dockerfile (first 40 lines) -----"
-      sed -n '1,40p' apps/web/Dockerfile || true
+  # Build the image from repo ROOT, telling Docker where the Dockerfile lives.
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - "-f"
+      - apps/web/Dockerfile
+      - "-t"
+      - ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+      - "-t"
+      - ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
+      - "--build-arg"
+      - NEXT_PUBLIC_API_BASE=${_NEXT_PUBLIC_API_BASE}
+      - "."
+    dir: "."
 
-# 1) Build the Next.js image (point at the Dockerfile in apps/web)
-- name: gcr.io/cloud-builders/docker
-  args:
-    - build
-    - -t
-    - ${_IMAGE}:${_TAG}
-    - -f
-    - apps/web/Dockerfile
-    - --build-arg
-    - NEXT_PUBLIC_API_BASE=${_API_BASE}
-    - .
+  # Push (Cloud Build auto-pushes images listed under `images`, but this is explicit)
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
 
-# 2) Push the image so Cloud Run can pull it
-- name: gcr.io/cloud-builders/docker
-  args: ["push", "${_IMAGE}:${_TAG}"]
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
 
-# 3) Deploy to Cloud Run
-- name: gcr.io/google.com/cloudsdktool/cloud-sdk
-  entrypoint: gcloud
-  args:
-    - run
-    - deploy
-    - ${_SERVICE}
-    - --image=${_IMAGE}:${_TAG}
-    - --region=${_REGION}
-    - --platform=managed
-    - --allow-unauthenticated
-    - --timeout=300
-    - --memory=1Gi
-    - --quiet
+  # Deploy to Cloud Run
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - "--image"
+      - ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+      - "--region"
+      - ${_LOCATION}
+      - "--platform"
+      - managed
+      - "--allow-unauthenticated"
+      - "--port"
+      - "8080"
+
