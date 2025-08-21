@@ -14,7 +14,7 @@ import {
 } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
 
-/** Values come from Cloud Run env via /api/runtime-env (served by backend) */
+/** Values come from frontend route /api/runtime-env at RUNTIME (no rebuilds) */
 type RuntimeEnv = {
   FIREBASE_API_KEY: string;
   FIREBASE_AUTH_DOMAIN: string;
@@ -26,11 +26,12 @@ type RuntimeEnv = {
 
 let envPromise: Promise<RuntimeEnv | null> | null = null;
 
+/** Fetch public-safe env at runtime */
 async function loadRuntimeEnv(): Promise<RuntimeEnv | null> {
   if (envPromise) return envPromise;
   envPromise = (async () => {
     try {
-      if (typeof window === "undefined") return null; // no-SSR
+      if (typeof window === "undefined") return null; // don't fetch during SSR
       const res = await fetch("/api/runtime-env", { cache: "no-store" });
       if (!res.ok) return null;
       const d = (await res.json()) as RuntimeEnv;
@@ -45,6 +46,7 @@ async function loadRuntimeEnv(): Promise<RuntimeEnv | null> {
   return envPromise;
 }
 
+/** Initialize Firebase ONLY in the browser and ONLY once we have keys */
 function ensureApp(env: RuntimeEnv | null): FirebaseApp | null {
   if (typeof window === "undefined" || !env) return null;
   const config = {
@@ -59,11 +61,20 @@ function ensureApp(env: RuntimeEnv | null): FirebaseApp | null {
   return apps.length ? apps[0] : initializeApp(config);
 }
 
-/** ---------- Public helpers ---------- */
+/* ---------- Public helpers ---------- */
+
 export async function getAuthIfReady(): Promise<Auth | null> {
   const env = await loadRuntimeEnv();
   const app = ensureApp(env);
   return app ? getAuth(app) : null;
+}
+
+/** Strict: throws if Firebase isn’t configured OR no app could be made */
+export async function getAuthStrict(): Promise<Auth> {
+  const env = await loadRuntimeEnv();
+  const app = ensureApp(env);
+  if (!app) throw new Error("Firebase is not configured.");
+  return getAuth(app);
 }
 
 export async function getFirestoreIfReady(): Promise<Firestore | null> {
@@ -72,16 +83,22 @@ export async function getFirestoreIfReady(): Promise<Firestore | null> {
   return app ? getFirestore(app) : null;
 }
 
+/** Strict: throws if Firestore cannot be created */
+export async function getFirestoreStrict(): Promise<Firestore> {
+  const env = await loadRuntimeEnv();
+  const app = ensureApp(env);
+  if (!app) throw new Error("Firebase is not configured.");
+  return getFirestore(app);
+}
+
 export async function signInWithGoogle(): Promise<void> {
-  const auth = await getAuthIfReady();
-  if (!auth) throw new Error("Firebase not configured yet.");
+  const auth = await getAuthStrict();
   const provider = new GoogleAuthProvider();
   await signInWithPopup(auth, provider);
 }
 
 export async function sendEmailLink(email: string): Promise<void> {
-  const auth = await getAuthIfReady();
-  if (!auth) throw new Error("Firebase not configured yet.");
+  const auth = await getAuthStrict();
   const actionCodeSettings = {
     url: typeof window !== "undefined" ? window.location.origin : "",
     handleCodeInApp: true,
