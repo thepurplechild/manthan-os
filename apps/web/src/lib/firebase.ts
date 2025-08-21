@@ -14,7 +14,6 @@ import {
 } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
 
-/** Values come from frontend route /api/runtime-env at RUNTIME (no rebuilds) */
 type RuntimeEnv = {
   FIREBASE_API_KEY: string;
   FIREBASE_AUTH_DOMAIN: string;
@@ -26,12 +25,11 @@ type RuntimeEnv = {
 
 let envPromise: Promise<RuntimeEnv | null> | null = null;
 
-/** Fetch public-safe env at runtime */
 async function loadRuntimeEnv(): Promise<RuntimeEnv | null> {
   if (envPromise) return envPromise;
   envPromise = (async () => {
     try {
-      if (typeof window === "undefined") return null; // don't fetch during SSR
+      if (typeof window === "undefined") return null;
       const res = await fetch("/api/runtime-env", { cache: "no-store" });
       if (!res.ok) return null;
       const d = (await res.json()) as RuntimeEnv;
@@ -46,7 +44,6 @@ async function loadRuntimeEnv(): Promise<RuntimeEnv | null> {
   return envPromise;
 }
 
-/** Initialize Firebase ONLY in the browser and ONLY once we have keys */
 function ensureApp(env: RuntimeEnv | null): FirebaseApp | null {
   if (typeof window === "undefined" || !env) return null;
   const config = {
@@ -61,15 +58,12 @@ function ensureApp(env: RuntimeEnv | null): FirebaseApp | null {
   return apps.length ? apps[0] : initializeApp(config);
 }
 
-/* ---------- Public helpers ---------- */
-
 export async function getAuthIfReady(): Promise<Auth | null> {
   const env = await loadRuntimeEnv();
   const app = ensureApp(env);
   return app ? getAuth(app) : null;
 }
 
-/** Strict: throws if Firebase isn’t configured OR no app could be made */
 export async function getAuthStrict(): Promise<Auth> {
   const env = await loadRuntimeEnv();
   const app = ensureApp(env);
@@ -83,7 +77,6 @@ export async function getFirestoreIfReady(): Promise<Firestore | null> {
   return app ? getFirestore(app) : null;
 }
 
-/** Strict: throws if Firestore cannot be created */
 export async function getFirestoreStrict(): Promise<Firestore> {
   const env = await loadRuntimeEnv();
   const app = ensureApp(env);
@@ -126,7 +119,6 @@ export async function signOut(): Promise<void> {
   await fbSignOut(auth);
 }
 
-/** Require a UID, or throw a clear error (used by pages) */
 export async function requireUid(): Promise<string> {
   const auth = await getAuthIfReady();
   const uid = auth?.currentUser?.uid;
