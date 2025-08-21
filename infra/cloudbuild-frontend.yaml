@@ -1,43 +1,50 @@
 # infra/cloudbuild-frontend.yaml
-# Build and deploy the frontend using the Dockerfile at apps/web/Dockerfile.
-# No separate node:20 build step (avoids the "step exited with non-zero status: 1" flake).
+# Build & deploy the frontend from apps/web/Dockerfile via Artifact Registry.
 
 timeout: "1200s"
-
-substitutions:
-  _REGION: "asia-south1"
-  _REPO: "manthan"
-  _SERVICE: "manthan-frontend"
-  _IMAGE: "asia-south1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${SHORT_SHA}"
 
 options:
   logging: CLOUD_LOGGING_ONLY
 
+# User substitutions (no nested expansion here)
+substitutions:
+  _REGION: "asia-south1"
+  _REPO: "manthan"            # Artifact Registry repo name (must exist in asia-south1)
+  _SERVICE: "manthan-frontend"
+
 steps:
-  # Build the image from apps/web/Dockerfile
   - name: gcr.io/cloud-builders/docker
     id: Build image
-    args: ["build", "-f", "apps/web/Dockerfile", "-t", "${_IMAGE}", "."]
+    args:
+      - build
+      - -f
+      - apps/web/Dockerfile
+      - -t
+      - asia-south1-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
+      - .
 
-  # Push to Artifact Registry
   - name: gcr.io/cloud-builders/docker
     id: Push image
-    args: ["push", "${_IMAGE}"]
+    args:
+      - push
+      - asia-south1-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
 
-  # Deploy to Cloud Run
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: Deploy Cloud Run
     entrypoint: gcloud
     args:
-      [
-        "run","deploy","${_SERVICE}",
-        "--image","${_IMAGE}",
-        "--region","${_REGION}",
-        "--platform","managed",
-        "--allow-unauthenticated"
-      ]
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image
+      - asia-south1-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
+      - --region
+      - ${_REGION}
+      - --platform
+      - managed
+      - --allow-unauthenticated
 
 images:
-  - "${_IMAGE}"
+  - asia-south1-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
 
 
