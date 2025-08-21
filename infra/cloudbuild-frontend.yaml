@@ -1,99 +1,43 @@
-# Builds Next.js (App Router) without a repo Dockerfile,
-# then creates a tiny distroless runtime image and deploys.
+# infra/cloudbuild-frontend.yaml
+# Build and deploy the frontend using the Dockerfile at apps/web/Dockerfile.
+# No separate node:20 build step (avoids the "step exited with non-zero status: 1" flake).
+
+timeout: "1200s"
 
 substitutions:
-  _LOCATION: "asia-south1"                       # Artifact Registry + Cloud Run region
-  _REPO: "manthan"                               # Artifact Registry repo name
-  _SERVICE: "manthan-frontend"                   # Cloud Run service name
-  _NEXT_PUBLIC_API_BASE: "https://manthan-frontend-524579286496.asia-south1.run.app"  # e.g. https://manthan-backend-xxxxx-asia-south1.run.app
+  _REGION: "asia-south1"
+  _REPO: "manthan"
+  _SERVICE: "manthan-frontend"
+  _IMAGE: "asia-south1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${SHORT_SHA}"
 
 options:
   logging: CLOUD_LOGGING_ONLY
 
-images:
-  - ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
-  - ${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
-
 steps:
-  # 1) Install deps & build Next in a Node container (no Dockerfile).
-  - name: node:20
-    id: "Install deps & build Next"
-    entrypoint: bash
-    env:
-      - NPM_CONFIG_LOGLEVEL=warn
-      - NPM_CONFIG_IGNORE_SCRIPTS=true        # <- skip ALL postinstall scripts
-      - NEXT_PUBLIC_API_BASE=${_NEXT_PUBLIC_API_BASE}
-      - NEXT_TELEMETRY_DISABLED=1
-    args:
-      - -lc
-      - |
-        set -eux
-        cd apps/web
-        # install deps (skip lifecycle scripts to avoid postinstall.mjs failures)
-        if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
-          npm ci --no-audit --no-fund --ignore-scripts
-        else
-          npm install --no-audit --no-fund --ignore-scripts
-        fi
-        # ensure TS toolchain so Next doesn't try to auto-install during build
-        npm i -D typescript @types/react @types/node --no-audit --no-fund --ignore-scripts || true
-
-        # IMPORTANT: next.config.mjs must have { output: "standalone" }
-        npm run build
-
-  # 2) Create a minimal runtime Dockerfile on the fly (no repo Dockerfile required).
+  # Build the image from apps/web/Dockerfile
   - name: gcr.io/cloud-builders/docker
-    id: "Create runtime Dockerfile"
-    entrypoint: bash
-    args:
-      - -lc
-      - |
-        cat > Dockerfile.runtime <<'EOF'
-        FROM gcr.io/distroless/nodejs20-debian12
-        WORKDIR /app
-        ENV NODE_ENV=production
-        ENV PORT=8080
-        EXPOSE 8080
-        # Copy Next standalone server, static, and public assets
-        COPY apps/web/.next/standalone ./
-        COPY apps/web/.next/static ./apps/web/.next/static
-        COPY apps/web/public ./apps/web/public
-        # Start Next standalone server (path emitted by Next)
-        CMD ["apps/web/server.js"]
-        EOF
+    id: Build image
+    args: ["build", "-f", "apps/web/Dockerfile", "-t", "${_IMAGE}", "."]
 
-  # 3) Build image from the ephemeral runtime Dockerfile.
+  # Push to Artifact Registry
   - name: gcr.io/cloud-builders/docker
-    id: "Build image"
-    args:
-      [
-        "build",
-        "-f", "Dockerfile.runtime",
-        "-t", "${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA",
-        "-t", "${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest",
-        "."
-      ]
+    id: Push image
+    args: ["push", "${_IMAGE}"]
 
-  # 4) Push images.
-  - name: gcr.io/cloud-builders/docker
-    id: "Push :sha"
-    args: ["push", "${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA"]
-
-  - name: gcr.io/cloud-builders/docker
-    id: "Push :latest"
-    args: ["push", "${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest"]
-
-  # 5) Deploy to Cloud Run.
+  # Deploy to Cloud Run
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    id: "Deploy Cloud Run"
+    id: Deploy Cloud Run
     entrypoint: gcloud
     args:
       [
-        "run", "deploy", "${_SERVICE}",
-        "--image", "${_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA",
-        "--region", "${_LOCATION}",
-        "--platform", "managed",
-        "--allow-unauthenticated",
-        "--port", "8080"
+        "run","deploy","${_SERVICE}",
+        "--image","${_IMAGE}",
+        "--region","${_REGION}",
+        "--platform","managed",
+        "--allow-unauthenticated"
       ]
+
+images:
+  - "${_IMAGE}"
+
 
