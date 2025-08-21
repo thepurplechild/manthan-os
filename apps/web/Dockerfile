@@ -12,8 +12,7 @@ ENV NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE}
 
 # Copy manifests + TS plumbing first for better cache
 COPY apps/web/package*.json apps/web/
-# If you have these files, keep them in the cache-friendly layer
-COPY apps/web/tsconfig.json apps/web/next-env.d.ts apps/web/ 2>/dev/null || true
+COPY apps/web/tsconfig.json apps/web/next-env.d.ts apps/web/
 
 # Install deps for the web app (devDeps needed for typecheck/build)
 RUN bash -lc 'cd apps/web && npm install --no-audit --no-fund'
@@ -38,4 +37,3 @@ COPY --from=builder /app/apps/web/public ./apps/web/public
 
 # Start the Next standalone server (path emitted by Next)
 CMD ["apps/web/server.js"]
-
