@@ -1,209 +1,127 @@
 // apps/web/src/lib/api.ts
-"use client";
 
-/**
- * Unified frontend API for ManthanOS web.
- * - GenAPI: calls the backend (Cloud Run) for generation/export
- * - ProjectsAPI: browser-safe localStorage stub (so pages compile/run without server storage)
- *
- * Notes
- * - Backend base URL is retrieved at runtime from /api/app-config (populated via Cloud Run env).
- * - ProjectsAPI returns shapes that match existing pages (array and { projects } both supported).
- */
-
-/* =================== Types =================== */
 export type IdeaOption = { logline: string; premise: string };
 export type OutlineOption = { outline: string };
 export type ScriptOption = { script: string };
 
-type IdeaReq = { genre: string; tone: string; seed: string; language: string };
-type OutlineReq = { logline: string; structure: string; style: string; language: string };
-type ScriptReq = { outline: string; style: string; language: string };
-type DeckReq = {
-  title: string;
-  logline: string;
-  synopsis: string;
-  characters: string;
-  world: string;
-  comps: string;
-  toneboard?: string;
-  language: string;
-};
-type ExportReq = { deck_json: any; format: "pdf" | "docx" };
+type AppConfig = { API_BASE: string };
 
-/* =================== Runtime config =================== */
+let API_BASE_CACHED: string | null = null;
 
-let runtimeCache: { API_BASE: string } | null = null;
+async function getBase(): Promise<string> {
+  if (API_BASE_CACHED) return API_BASE_CACHED;
 
-async function getRuntime(): Promise<{ API_BASE: string }> {
-  if (runtimeCache) return runtimeCache;
-  // This route must exist at apps/web/app/api/app-config/route.ts
-  const res = await fetch("/api/app-config", { cache: "no-store" });
-  if (!res.ok) throw new Error("Cannot load runtime app-config.");
-  const data = (await res.json()) as { API_BASE: string };
-  if (!data?.API_BASE) {
-    throw new Error(
-      "API base URL is empty. Set NEXT_PUBLIC_API_BASE on the frontend Cloud Run service."
-    );
+  // Try runtime route first (browser)
+  if (typeof window !== "undefined") {
+    try {
+      const res = await fetch("/api/app-config", { cache: "no-store" });
+      if (res.ok) {
+        const j = (await res.json()) as AppConfig;
+        if (j?.API_BASE) {
+          API_BASE_CACHED = j.API_BASE.replace(/\/+$/, "");
+          return API_BASE_CACHED;
+        }
+      }
+    } catch {}
   }
-  runtimeCache = data;
-  return data;
+
+  // Fallback to build-time env
+  API_BASE_CACHED = (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/+$/, "");
+  return API_BASE_CACHED;
 }
 
 async function post<T>(path: string, body: any): Promise<T> {
-  const { API_BASE } = await getRuntime();
-  const url = `${API_BASE.replace(/\/$/, "")}${path}`;
-  const r = await fetch(url, {
+  const base = await getBase();
+  if (!base) throw new Error("Backend API base URL is not configured. Set NEXT_PUBLIC_API_BASE on the frontend service.");
+  const res = await fetch(`${base}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body ?? {}),
+    body: JSON.stringify(body),
   });
-  if (!r.ok) {
-    const text = await r.text();
-    throw new Error(`API ${path} failed: ${r.status} ${text.slice(0, 500)}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status} ${res.statusText} – ${text.slice(0, 400)}`);
   }
-  return (await r.json()) as T;
+  return (await res.json()) as T;
 }
-
-/* =================== GenAPI (backend calls) =================== */
 
 export const GenAPI = {
-  ideas: (req: IdeaReq) =>
-    post<{ content?: string; options?: IdeaOption[] }>("/gen/idea", req),
-  outlines: (req: OutlineReq) =>
-    post<{ content?: string; options?: OutlineOption[] }>("/gen/outline", req),
-  scripts: (req: ScriptReq) =>
-    post<{ content?: string; options?: ScriptOption[] }>("/gen/script", req),
-  deckBuild: (req: DeckReq) =>
-    post<{ deck?: any; options?: { deck: any }[] }>("/gen/deck", req),
-  export: (req: ExportReq) => post<{ url: string }>("/export", req),
+  async ideas(req: { genre: string; tone: string; seed: string; language: string }): Promise<{ options: IdeaOption[] }> {
+    const r = await post<{ content: string }>("/gen/idea", req);
+    const ideas = r.content
+      ?.split(/\n{2,}/)
+      .filter(Boolean)
+      .slice(0, 3)
+      .map((chunk) => {
+        const m = chunk.match(/logline[:\-]\s*(.+)/i);
+        const n = chunk.match(/premise[:\-]\s*(.+)/i);
+        return {
+          logline: (m ? m[1] : chunk).trim().slice(0, 240),
+          premise: (n ? n[1] : chunk).trim().slice(0, 1200),
+        };
+      }) || [];
+    return { options: ideas.length ? ideas : [{ logline: r.content.slice(0, 140), premise: r.content }] };
+  },
+
+  async outlines(req: { logline: string; structure: string; style: string; language: string }): Promise<{ options: OutlineOption[] }> {
+    const r = await post<{ content: string }>("/gen/outline", req);
+    const options = r.content?.split(/\n{2,}/).filter(Boolean).slice(0, 3).map((o) => ({ outline: o })) || [];
+    return { options: options.length ? options : [{ outline: r.content }] };
+  },
+
+  async scripts(req: { outline: string; style: string; language: string }): Promise<{ options: ScriptOption[] }> {
+    const r = await post<{ content: string }>("/gen/script", req);
+    const options = r.content?.split(/\n{3,}/).filter(Boolean).slice(0, 3).map((s) => ({ script: s })) || [];
+    return { options: options.length ? options : [{ script: r.content }] };
+  },
+
+  async deckBuild(req: {
+    title: string; logline: string; synopsis: string; characters: string; world: string; comps: string; toneboard?: string; language: string;
+  }): Promise<{ options: { deck: any }[] }> {
+    const r = await post<{ deck: any } | { content: string }>("/gen/deck", req);
+    const deckObj = (r as any).deck && typeof (r as any).deck === "object" ? (r as any).deck : { raw: (r as any).content || "" };
+    return { options: [{ deck: deckObj }] };
+  },
+
+  async export(req: { deck_json: any; format: "pdf" | "docx" }): Promise<{ url: string }> {
+    return await post<{ url: string }>("/export", { deck_json: req.deck_json, format: req.format });
+  },
 };
 
-/* =================== ProjectsAPI (browser localStorage stub) =================== */
-
-export type ProjectIndexItem = { project_id: string; title: string; updatedAt: number };
-type StepName = "ideas" | "outline" | "script" | "deck";
-type ProjectSteps = {
-  ideas?: { options: IdeaOption[]; chosen: number | null; meta?: any };
-  outline?: { options: OutlineOption[]; chosen: number | null; input?: IdeaOption };
-  script?: { options: ScriptOption[]; chosen: number | null; input?: OutlineOption };
-  deck?: { deckJson: any };
-};
-
-export type ProjectDoc = {
-  meta: { title: string; createdAt: number; updatedAt: number };
-  steps: ProjectSteps;
-};
-
-const isBrowser = typeof window !== "undefined";
-const PREFIX = "manthan:projects";
-
-function idxKey(uid: string) {
-  return `${PREFIX}:${uid}:index`;
-}
-function docKey(uid: string, pid: string) {
-  return `${PREFIX}:${uid}:${pid}`;
-}
-
-function readIndex(uid: string): ProjectIndexItem[] {
-  if (!isBrowser) return [];
-  try {
-    const raw = window.localStorage.getItem(idxKey(uid));
-    return raw ? (JSON.parse(raw) as ProjectIndexItem[]) : [];
-  } catch {
-    return [];
-  }
-}
-function writeIndex(uid: string, items: ProjectIndexItem[]) {
-  if (!isBrowser) return;
-  try {
-    window.localStorage.setItem(idxKey(uid), JSON.stringify(items));
-  } catch {}
-}
-function readDoc(uid: string, pid: string): ProjectDoc | null {
-  if (!isBrowser) return null;
-  try {
-    const raw = window.localStorage.getItem(docKey(uid, pid));
-    return raw ? (JSON.parse(raw) as ProjectDoc) : null;
-  } catch {
-    return null;
-  }
-}
-function writeDoc(uid: string, pid: string, doc: ProjectDoc) {
-  if (!isBrowser) return;
-  try {
-    window.localStorage.setItem(docKey(uid, pid), JSON.stringify(doc));
-  } catch {}
-}
-function newId(): string {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
-}
+/** Local, no-backend projects index to keep builds unblocked */
+export type ProjectIndexItem = { id: string; title: string; updated_at: number };
+const LS_KEY = "manthan.projects";
 
 export const ProjectsAPI = {
-  /**
-   * Returns an Array that ALSO has a `.projects` property so both of these work:
-   *   const arr = await ProjectsAPI.list(uid)
-   *   const { projects } = await ProjectsAPI.list(uid)
-   */
-  async list(
-    uid: string
-  ): Promise<ProjectIndexItem[] & { projects: ProjectIndexItem[] }> {
-    const arr = readIndex(uid);
-    // Make a hybrid so callers can use either pattern
-    const hybrid = Object.assign([...arr], { projects: arr });
-    return hybrid as ProjectIndexItem[] & { projects: ProjectIndexItem[] };
+  async list(_uid: string): Promise<{ projects: ProjectIndexItem[] }> {
+    if (typeof window === "undefined") return { projects: [] };
+    const arr = JSON.parse(window.localStorage.getItem(LS_KEY) || "[]") as ProjectIndexItem[];
+    return { projects: arr.sort((a, b) => b.updated_at - a.updated_at) };
   },
-
-  async create(uid: string, title: string): Promise<{ project_id: string }> {
-    if (!isBrowser) return { project_id: "" };
-    const pid = newId();
-    const now = Date.now();
-    const index = readIndex(uid);
-    index.unshift({ project_id: pid, title: title || "Untitled", updatedAt: now });
-    writeIndex(uid, index);
-    const doc: ProjectDoc = {
-      meta: { title: title || "Untitled", createdAt: now, updatedAt: now },
-      steps: {},
-    };
-    writeDoc(uid, pid, doc);
-    return { project_id: pid };
+  async create(_uid: string, title: string): Promise<{ project_id: string }> {
+    if (typeof window === "undefined") return { project_id: "" };
+    const id = crypto.randomUUID();
+    const arr = JSON.parse(window.localStorage.getItem(LS_KEY) || "[]") as ProjectIndexItem[];
+    arr.push({ id, title, updated_at: Date.now() });
+    window.localStorage.setItem(LS_KEY, JSON.stringify(arr));
+    return { project_id: id };
   },
-
-  async get(uid: string, pid: string): Promise<ProjectDoc> {
-    const doc = readDoc(uid, pid);
-    return (
-      doc || {
-        meta: {
-          title: "Untitled",
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-        steps: {},
-      }
-    );
+  async get(_uid: string, id: string): Promise<{ steps: any }> {
+    if (typeof window === "undefined") return { steps: {} };
+    const raw = window.localStorage.getItem(`manthan.project.${id}`);
+    return { steps: raw ? JSON.parse(raw) : {} };
   },
-
-  async saveStep(uid: string, pid: string, step: StepName, payload: any): Promise<void> {
-    const doc = readDoc(uid, pid);
-    const merged: ProjectDoc = doc || {
-      meta: {
-        title: "Untitled",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      },
-      steps: {},
-    };
-    merged.steps = { ...merged.steps, [step]: payload };
-    merged.meta.updatedAt = Date.now();
-    writeDoc(uid, pid, merged);
-
-    // update index updatedAt
-    const idx = readIndex(uid);
-    const i = idx.findIndex((x) => x.project_id === pid);
-    if (i >= 0) {
-      idx[i] = { ...idx[i], updatedAt: merged.meta.updatedAt };
-      writeIndex(uid, idx);
-    }
+  async saveStep(_uid: string, id: string, key: string, value: any): Promise<void> {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem(`manthan.project.${id}`);
+    const obj = raw ? JSON.parse(raw) : {};
+    obj[key] = value;
+    window.localStorage.setItem(`manthan.project.${id}`, JSON.stringify(obj));
+    const arr = JSON.parse(window.localStorage.getItem(LS_KEY) || "[]") as ProjectIndexItem[];
+    const i = arr.findIndex((p) => p.id === id);
+    if (i >= 0) arr[i].updated_at = Date.now();
+    window.localStorage.setItem(LS_KEY, JSON.stringify(arr));
   },
 };
+
 
