@@ -6,14 +6,12 @@ FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 ENV NODE_ENV=production
 
-# (Optional) backend base URL baked at build time (override via Cloud Build arg)
+# Optional: bake backend base URL at build-time (override via Cloud Build arg)
 ARG NEXT_PUBLIC_API_BASE=""
 ENV NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE}
 
-# Copy manifests first for better cache
+# Copy manifests first for caching
 COPY apps/web/package*.json apps/web/
-# TypeScript shims (commit these to repo; if missing, add them per earlier instructions)
-COPY apps/web/tsconfig.json apps/web/next-env.d.ts apps/web/ 2>/dev/null || true
 
 # Install deps for the web app (include devDeps for typecheck/build)
 # IMPORTANT: ignore lifecycle scripts to prevent postinstall from running in CI
@@ -22,7 +20,7 @@ RUN bash -lc 'cd apps/web && npm install --no-audit --no-fund --ignore-scripts'
 # Copy the rest of the repo (sources, components, app dir)
 COPY . .
 
-# Build (next.config.mjs should have output: "standalone")
+# Build (next.config.mjs must have: output: "standalone")
 RUN bash -lc 'cd apps/web && npm run build'
 
 # If Next placed server.js at the root of standalone, mirror it to apps/web/server.js
