@@ -1,50 +1,36 @@
 # infra/cloudbuild-frontend.yaml
-# Build & deploy the frontend from apps/web/Dockerfile via Artifact Registry.
+# YAML-only pipeline: build from source (apps/web) with Cloud Run Buildpacks
+# and deploy to Cloud Run. No Dockerfile is used.
 
 timeout: "1200s"
 
 options:
   logging: CLOUD_LOGGING_ONLY
 
-# User substitutions (no nested expansion here)
 substitutions:
   _REGION: "asia-south1"
-  _REPO: "manthan"            # Artifact Registry repo name (must exist in asia-south1)
   _SERVICE: "manthan-frontend"
+  # IMPORTANT: set this to your backend HTTPS base (NO trailing slash)
+  _API_BASE: "https://manthan-backend-asia-south1.run.app"
 
 steps:
-  - name: gcr.io/cloud-builders/docker
-    id: Build image
-    args:
-      - build
-      - -f
-      - apps/web/Dockerfile
-      - -t
-      - asia-south1-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
-      - .
-
-  - name: gcr.io/cloud-builders/docker
-    id: Push image
-    args:
-      - push
-      - asia-south1-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
-
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    id: Deploy Cloud Run
-    entrypoint: gcloud
+    id: Build & Deploy (source)
+    entrypoint: bash
     args:
-      - run
-      - deploy
-      - ${_SERVICE}
-      - --image
-      - asia-south1-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
-      - --region
-      - ${_REGION}
-      - --platform
-      - managed
-      - --allow-unauthenticated
+      - -lc
+      - |
+        # Build from apps/web and deploy with envs.
+        # NPM_CONFIG_PRODUCTION=false ensures devDeps available for Next build.
+        gcloud run deploy ${_SERVICE} \
+          --source ./apps/web \
+          --region ${_REGION} \
+          --allow-unauthenticated \
+          --build-env-vars NPM_CONFIG_PRODUCTION=false \
+          --set-env-vars API_BASE=${_API_BASE}
 
-images:
-  - asia-south1-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}
+# NOTE: with --source deploys, Cloud Run stores the image in a managed repo
+# (cloud-run-source-deploy). You don't need an explicit "images:" section.
+
 
 
