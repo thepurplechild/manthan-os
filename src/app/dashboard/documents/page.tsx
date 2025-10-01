@@ -11,6 +11,7 @@ import {
   Upload
 } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -74,6 +75,7 @@ const getStatusBadge = (status: string) => {
 }
 
 export default function DocumentsPage() {
+  const router = useRouter()
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -150,7 +152,7 @@ export default function DocumentsPage() {
   }
 
   const handleView = (document: Document) => {
-    window.open(document.storage_url, '_blank')
+    router.push(`/dashboard/documents/${document.id}`)
   }
 
   if (loading) {

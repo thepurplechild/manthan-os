@@ -120,3 +120,38 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* React PDF Styles */
+.react-pdf__Document {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.react-pdf__Page {
+  max-width: calc(100% - 2em);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  margin: 1em;
+}
+
+.react-pdf__Page__canvas {
+  max-width: 100%;
+  height: auto !important;
+}
+
+.react-pdf__Page__textContent {
+  border: 1px solid transparent;
+  box-sizing: border-box;
+  color: transparent;
+  cursor: text;
+  overflow: hidden;
+  position: absolute;
+  transform-origin: left top;
+  z-index: 2;
+}
+
+.react-pdf__Page__annotations {
+  color: transparent;
+  position: absolute;
+  z-index: 3;
+}

@@ -85,6 +85,80 @@ export async function deleteDocument(documentId: string) {
   return { success: true }
 }
 
+export async function getDocumentById(documentId: string) {
+  const supabase = await createClient()
+
+  // Get authenticated user
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { error: 'Unauthorized' }
+  }
+
+  // Get the document to ensure it belongs to the user
+  const { data: document, error: fetchError } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('id', documentId)
+    .eq('owner_id', user.id)
+    .single()
+
+  if (fetchError) {
+    return { error: `Document not found: ${fetchError.message}` }
+  }
+
+  return {
+    success: true,
+    document
+  }
+}
+
+export async function getDocumentViewUrl(documentId: string) {
+  const supabase = await createClient()
+
+  // Get authenticated user
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { error: 'Unauthorized' }
+  }
+
+  // Get the document to ensure it belongs to the user and get storage path
+  const { data: document, error: fetchError } = await supabase
+    .from('documents')
+    .select('storage_path, owner_id, title')
+    .eq('id', documentId)
+    .single()
+
+  if (fetchError) {
+    return { error: `Document not found: ${fetchError.message}` }
+  }
+
+  if (document.owner_id !== user.id) {
+    return { error: 'Unauthorized to access this document' }
+  }
+
+  // Create a signed URL valid for 1 hour for viewing
+  const { data, error: signedUrlError } = await supabase.storage
+    .from('creator-assets')
+    .createSignedUrl(document.storage_path, 3600)
+
+  if (signedUrlError) {
+    return { error: `Failed to generate view URL: ${signedUrlError.message}` }
+  }
+
+  return {
+    success: true,
+    viewUrl: data.signedUrl
+  }
+}
+
 export async function getDocumentDownloadUrl(documentId: string) {
   const supabase = await createClient()
 
