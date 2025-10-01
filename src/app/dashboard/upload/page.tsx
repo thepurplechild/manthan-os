@@ -1,29 +1,31 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useDropzone } from 'react-dropzone'
-import { uploadDocument } from '@/app/actions/upload'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { Upload, X, FileText, Loader2 } from 'lucide-react'
+import { uploadDocument } from '@/app/actions/upload'
 import { toast } from 'sonner'
-import { Upload, File, CheckCircle2, X } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
 
-interface SelectedFile {
+type SelectedFile = {
   file: File
   preview: string
   extractedText?: string
 }
 
 export default function UploadPage() {
+  const router = useRouter()
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([])
   const [isUploading, setIsUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
   const [isExtracting, setIsExtracting] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
 
   // Text extraction function for PDFs
   async function extractTextFromPDF(file: File): Promise<string> {
@@ -34,7 +36,14 @@ export default function UploadPage() {
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i)
       const textContent = await page.getTextContent()
-      const pageText = textContent.items.map((item: { str: string }) => item.str).join(' ')
+      const pageText = textContent.items
+        .map((item) => {
+          if ('str' in item) {
+            return item.str
+          }
+          return ''
+        })
+        .join(' ')
       fullText += pageText + '\n'
     }
 
@@ -45,7 +54,7 @@ export default function UploadPage() {
     accept: {
       'application/pdf': ['.pdf'],
       'text/plain': ['.txt'],
-      'text/markdown': ['.md']
+      'text/markdown': ['.md'],
     },
     maxSize: 50 * 1024 * 1024, // 50MB
     multiple: false,
@@ -64,7 +73,7 @@ export default function UploadPage() {
         const file = acceptedFiles[0]
         const selectedFile: SelectedFile = {
           file,
-          preview: URL.createObjectURL(file)
+          preview: URL.createObjectURL(file),
         }
 
         setSelectedFiles([selectedFile])
@@ -74,20 +83,30 @@ export default function UploadPage() {
           setIsExtracting(true)
           try {
             const extractedText = await extractTextFromPDF(file)
-            setSelectedFiles([{
-              ...selectedFile,
-              extractedText
-            }])
+            
+            if (!extractedText || extractedText.trim().length === 0) {
+              toast.error('No text found in PDF. Please ensure the PDF contains extractable text.')
+              setSelectedFiles([])
+              return
+            }
+            
+            setSelectedFiles([
+              {
+                ...selectedFile,
+                extractedText,
+              },
+            ])
             toast.success('Text extracted successfully from PDF!')
           } catch (error) {
             toast.error('Failed to extract text from PDF')
             console.error('PDF extraction error:', error)
+            setSelectedFiles([])
           } finally {
             setIsExtracting(false)
           }
         }
       }
-    }
+    },
   })
 
   const removeFile = () => {
@@ -113,211 +132,175 @@ export default function UploadPage() {
     setIsUploading(true)
     setUploadProgress(0)
 
-    // Simulate progress for UI feedback
-    const progressInterval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 90) {
-          clearInterval(progressInterval)
-          return 90
-        }
-        return prev + 10
-      })
-    }, 200)
-
     try {
+      // Simulate progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress((prev) => {
+          if (prev >= 90) {
+            clearInterval(progressInterval)
+            return prev
+          }
+          return prev + 10
+        })
+      }, 200)
+
       const result = await uploadDocument(formData)
 
       clearInterval(progressInterval)
       setUploadProgress(100)
 
-      if (result.success) {
-        toast.success(`${file.name} has been uploaded successfully!`)
-
-        // Clear form after successful upload
-        setTimeout(() => {
-          removeFile()
-          setUploadProgress(0)
-        }, 1000)
+      if (result.error) {
+        toast.error(result.error)
       } else {
-        throw new Error(result.error || 'Upload failed')
+        toast.success('Document uploaded successfully!')
+        removeFile()
+        setTimeout(() => {
+          router.push('/dashboard/documents')
+        }, 1000)
       }
     } catch (error) {
-      clearInterval(progressInterval)
-      setUploadProgress(0)
-
-      toast.error(error instanceof Error ? error.message : 'Something went wrong')
+      toast.error('Upload failed. Please try again.')
     } finally {
       setIsUploading(false)
+      setUploadProgress(0)
     }
-  }
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-  }
-
-  const getFileIcon = () => {
-    return <File className="h-8 w-8 text-blue-500" />
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Upload Script</h1>
-        <p className="text-gray-600 mt-1">
-          Upload your script files to get started with analysis
+        <h1 className="text-3xl font-bold">Upload Document</h1>
+        <p className="text-muted-foreground mt-2">
+          Upload your script or document for AI analysis
         </p>
       </div>
 
       <Card>
-        <CardContent className="p-6">
-          <div className="space-y-6">
-            {/* Drop Zone */}
-            <div
-              {...getRootProps()}
-              className={`
-                border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
-                ${isDragActive
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-300 hover:border-gray-400'
-                }
-              `}
-            >
-              <input {...getInputProps()} />
-              <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <p className="text-lg text-gray-600 mb-2">
-                {isDragActive
-                  ? 'Drop your script here'
-                  : 'Drag and drop your script here, or click to browse'
-                }
-              </p>
-              <p className="text-sm text-gray-500">
-                Supports PDF, TXT, and MD files up to 50MB
-              </p>
+        <CardContent className="pt-6">
+          <div
+            {...getRootProps()}
+            className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${
+              isDragActive
+                ? 'border-primary bg-primary/5'
+                : 'border-muted-foreground/25 hover:border-primary/50'
+            }`}
+          >
+            <input {...getInputProps()} />
+            <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-lg font-medium mb-2">
+              {isDragActive
+                ? 'Drop your file here'
+                : 'Drag and drop your script here, or click to browse'}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Supports PDF, TXT, and MD files up to 50MB
+            </p>
+          </div>
+
+          {isExtracting && (
+            <div className="mt-6 p-4 border rounded-lg bg-muted/50">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <div className="flex-1">
+                  <p className="font-medium">Extracting text from PDF...</p>
+                  <p className="text-sm text-muted-foreground">
+                    This may take a moment for large files
+                  </p>
+                </div>
+              </div>
             </div>
+          )}
 
-            {/* File Preview */}
-            {selectedFiles.length > 0 && (
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium text-gray-900">Selected File</h3>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      {getFileIcon()}
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {selectedFiles[0].file.name}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {formatFileSize(selectedFiles[0].file.size)}
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={removeFile}
-                      disabled={isUploading || isExtracting}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Text Extraction Progress */}
-                {isExtracting && (
-                  <div className="bg-blue-50 rounded-lg p-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                      <span className="text-sm text-blue-700">Extracting text from PDF...</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Text Preview */}
-                {selectedFiles[0].extractedText && !isExtracting && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-gray-900">Text Preview</h4>
-                    <div className="bg-gray-50 rounded-lg p-4 border">
-                      <p className="text-xs text-gray-600 mb-2">
-                        {selectedFiles[0].extractedText.length.toLocaleString()} characters extracted
+          {selectedFiles.length > 0 && !isExtracting && (
+            <div className="mt-6 space-y-4">
+              <h3 className="font-semibold">Selected File</h3>
+              {selectedFiles.map((selectedFile, index) => (
+                <div key={index} className="flex items-center gap-4 p-4 border rounded-lg">
+                  <FileText className="h-10 w-10 text-primary" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{selectedFile.file.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {(selectedFile.file.size / 1024).toFixed(2)} KB
+                    </p>
+                    {selectedFile.extractedText && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Extracted: {selectedFile.extractedText.length.toLocaleString()}{' '}
+                        characters
                       </p>
-                      <div className="text-sm text-gray-700 max-h-32 overflow-y-auto">
-                        {selectedFiles[0].extractedText.slice(0, 500)}
-                        {selectedFiles[0].extractedText.length > 500 && '...'}
-                      </div>
-                    </div>
+                    )}
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* Upload Progress */}
-            {isUploading && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Uploading...</span>
-                  <span className="text-gray-600">{uploadProgress}%</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={removeFile}
+                    disabled={isUploading}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Progress value={uploadProgress} className="w-full" />
-              </div>
-            )}
+              ))}
 
-            {/* Upload Button */}
-            <div className="flex justify-end">
+              {selectedFiles[0]?.extractedText && (
+                <div className="p-4 border rounded-lg bg-muted/50">
+                  <p className="text-sm font-medium mb-2">Text Preview:</p>
+                  <p className="text-sm text-muted-foreground line-clamp-3">
+                    {selectedFiles[0].extractedText.slice(0, 500)}
+                    {selectedFiles[0].extractedText.length > 500 && '...'}
+                  </p>
+                </div>
+              )}
+
+              {isUploading && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Uploading...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <Progress value={uploadProgress} />
+                </div>
+              )}
+
               <Button
                 onClick={handleUpload}
-                disabled={selectedFiles.length === 0 || isUploading || isExtracting}
-                className="min-w-[120px]"
+                disabled={isUploading || isExtracting}
+                className="w-full"
               >
                 {isUploading ? (
                   <>
-                    <Upload className="h-4 w-4 mr-2 animate-spin" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Uploading...
                   </>
                 ) : (
                   <>
-                    <Upload className="h-4 w-4 mr-2" />
+                    <Upload className="mr-2 h-4 w-4" />
                     Upload File
                   </>
                 )}
               </Button>
             </div>
-
-            {/* Success Message */}
-            {uploadProgress === 100 && !isUploading && (
-              <div className="flex items-center justify-center p-4 bg-green-50 rounded-lg">
-                <CheckCircle2 className="h-5 w-5 text-green-500 mr-2" />
-                <span className="text-green-700">File uploaded successfully!</span>
-              </div>
-            )}
-          </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Info Card */}
       <Card>
-        <CardContent className="p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
-            What happens after upload?
-          </h3>
-          <div className="space-y-3 text-sm text-gray-600">
-            <div className="flex items-start space-x-2">
-              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
-              <p>Your script will be securely stored and processed</p>
-            </div>
-            <div className="flex items-start space-x-2">
-              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
-              <p>AI analysis will extract characters, scenes, and dialogue</p>
-            </div>
-            <div className="flex items-start space-x-2">
-              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
-              <p>You&apos;ll be able to generate casting suggestions and breakdowns</p>
-            </div>
-          </div>
+        <CardContent className="pt-6">
+          <h3 className="font-semibold mb-4">What happens after upload?</h3>
+          <ul className="space-y-2 text-sm text-muted-foreground">
+            <li className="flex items-start gap-2">
+              <span className="text-primary">•</span>
+              <span>Your script will be securely stored and processed</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-primary">•</span>
+              <span>AI analysis will extract characters, scenes, and dialogue</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-primary">•</span>
+              <span>
+                You&apos;ll be able to generate casting suggestions and breakdowns
+              </span>
+            </li>
+          </ul>
         </CardContent>
       </Card>
     </div>
