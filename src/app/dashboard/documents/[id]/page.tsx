@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Download, FileText, Loader2, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Download, FileText, Loader2, AlertCircle, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { getDocumentById, getDocumentViewUrl } from '@/app/actions/documents'
+import { processDocument } from '@/app/actions/process'
 import PDFViewer from '@/components/PDFViewer'
 
 interface Document {
@@ -19,6 +21,31 @@ interface Document {
   storage_url: string
   storage_path: string
   owner_id: string
+}
+
+interface Character {
+  name: string
+  description: string
+}
+
+interface Scene {
+  heading: string
+  location: string
+  timeOfDay?: string
+}
+
+interface Dialogue {
+  character: string
+  text: string
+  context?: string
+}
+
+interface DocumentSection {
+  id: string
+  document_id: string
+  section_type: string
+  content: Character[] | Scene[] | Dialogue[]
+  created_at: string
 }
 
 const formatFileSize = (bytes: number): string => {
@@ -64,6 +91,8 @@ export default function DocumentViewerPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [processing, setProcessing] = useState(false)
+  const [sections, setSections] = useState<DocumentSection[]>([])
 
   useEffect(() => {
     if (documentId) {
@@ -94,10 +123,49 @@ export default function DocumentViewerPage() {
 
       setViewUrl(viewResult.viewUrl!)
 
+      // Fetch analysis results if document is completed
+      if (documentResult.document!.processing_status === 'COMPLETED') {
+        await fetchAnalysisResults()
+      }
+
     } catch {
       setError('Failed to load document')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchAnalysisResults = async () => {
+    try {
+      const response = await fetch(`/api/documents/${documentId}/sections`)
+      if (response.ok) {
+        const data = await response.json()
+        setSections(data.sections || [])
+      }
+    } catch (error) {
+      console.error('Failed to fetch analysis results:', error)
+    }
+  }
+
+  const handleAnalyzeScript = async () => {
+    if (!document) return
+
+    try {
+      setProcessing(true)
+      setError(null)
+
+      const result = await processDocument(documentId)
+      if (result.error) {
+        setError(result.error)
+        return
+      }
+
+      // Refresh document to get updated status
+      await fetchDocument()
+    } catch {
+      setError('Failed to process document')
+    } finally {
+      setProcessing(false)
     }
   }
 
@@ -195,18 +263,36 @@ export default function DocumentViewerPage() {
           Back to Documents
         </Button>
 
-        <Button
-          onClick={handleDownload}
-          disabled={downloading}
-          className="flex items-center gap-2"
-        >
-          {downloading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Download className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          {document.processing_status === 'UPLOADED' && (
+            <Button
+              onClick={handleAnalyzeScript}
+              disabled={processing}
+              variant="default"
+              className="flex items-center gap-2"
+            >
+              {processing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
+              {processing ? 'Analyzing...' : 'Analyze Script'}
+            </Button>
           )}
-          Download
-        </Button>
+          <Button
+            onClick={handleDownload}
+            disabled={downloading}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            {downloading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            Download
+          </Button>
+        </div>
       </div>
 
       {/* Document Metadata */}
@@ -241,6 +327,84 @@ export default function DocumentViewerPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Separator />
+
+      {/* Analysis Results */}
+      {document.processing_status === 'COMPLETED' && sections.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Script Analysis</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Accordion type="single" collapsible className="w-full">
+              {sections.map((section) => {
+                if (section.section_type === 'characters') {
+                  const characters = section.content as Character[]
+                  return (
+                    <AccordionItem key={section.id} value="characters">
+                      <AccordionTrigger>Characters ({characters.length})</AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-4">
+                          {characters.map((character, index) => (
+                            <div key={index} className="border-l-2 border-blue-200 pl-4">
+                              <h4 className="font-semibold">{character.name}</h4>
+                              <p className="text-sm text-muted-foreground">{character.description}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  )
+                }
+                if (section.section_type === 'scenes') {
+                  const scenes = section.content as Scene[]
+                  return (
+                    <AccordionItem key={section.id} value="scenes">
+                      <AccordionTrigger>Scenes ({scenes.length})</AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-4">
+                          {scenes.map((scene, index) => (
+                            <div key={index} className="border-l-2 border-green-200 pl-4">
+                              <h4 className="font-semibold">{scene.heading}</h4>
+                              <div className="text-sm text-muted-foreground">
+                                <p><strong>Location:</strong> {scene.location}</p>
+                                {scene.timeOfDay && <p><strong>Time:</strong> {scene.timeOfDay}</p>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  )
+                }
+                if (section.section_type === 'dialogue') {
+                  const dialogue = section.content as Dialogue[]
+                  return (
+                    <AccordionItem key={section.id} value="dialogue">
+                      <AccordionTrigger>Key Dialogue ({dialogue.length})</AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-4">
+                          {dialogue.map((line, index) => (
+                            <div key={index} className="border-l-2 border-purple-200 pl-4">
+                              <h4 className="font-semibold">{line.character}</h4>
+                              <p className="text-sm mb-1">&ldquo;{line.text}&rdquo;</p>
+                              {line.context && (
+                                <p className="text-xs text-muted-foreground italic">{line.context}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  )
+                }
+                return null
+              })}
+            </Accordion>
+          </CardContent>
+        </Card>
+      )}
 
       <Separator />
 

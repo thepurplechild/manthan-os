@@ -35,6 +35,29 @@ export interface Database {
           created_at?: string
         }
       }
+      document_sections: {
+        Row: {
+          id: string
+          document_id: string
+          section_type: string
+          content: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          document_id: string
+          section_type: string
+          content: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          document_id?: string
+          section_type?: string
+          content?: Json
+          created_at?: string
+        }
+      }
     }
   }
 }
