@@ -3,54 +3,28 @@ import { createClient } from '@/lib/supabase/server'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const supabase = await createClient()
+  const { id } = await params
+  const supabase = await createClient()
 
-    // Get authenticated user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const documentId = params.id
-
-    // Verify user owns the document
-    const { data: document, error: docError } = await supabase
-      .from('documents')
-      .select('owner_id')
-      .eq('id', documentId)
-      .single()
-
-    if (docError || !document || document.owner_id !== user.id) {
-      return NextResponse.json({ error: 'Document not found' }, { status: 404 })
-    }
-
-    // Fetch document sections
-    const { data: sections, error: sectionsError } = await supabase
-      .from('document_sections')
-      .select('*')
-      .eq('document_id', documentId)
-      .order('created_at', { ascending: true })
-
-    if (sectionsError) {
-      return NextResponse.json(
-        { error: 'Failed to fetch sections' },
-        { status: 500 }
-      )
-    }
-
-    return NextResponse.json({ sections })
-  } catch (error) {
-    console.error('API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  const { data: sections, error } = await supabase
+    .from('document_sections')
+    .select('*')
+    .eq('document_id', id)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ sections })
 }
