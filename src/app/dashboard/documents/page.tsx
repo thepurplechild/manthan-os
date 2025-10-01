@@ -29,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { toast } from 'sonner'
 import { getDocuments, deleteDocument, getDocumentDownloadUrl } from '@/app/actions/documents'
 
 interface Document {
@@ -135,9 +136,14 @@ export default function DocumentsPage() {
   const handleDownload = async (documentId: string) => {
   try {
     const result = await getDocumentDownloadUrl(documentId)
-    
+
     if (result.error) {
       toast.error(result.error)
+      return
+    }
+
+    if (!result.url || !result.title) {
+      toast.error('Invalid download response')
       return
     }
 
@@ -148,7 +154,7 @@ export default function DocumentsPage() {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    
+
     toast.success('Download started')
   } catch {
     toast.error('Failed to download document')
