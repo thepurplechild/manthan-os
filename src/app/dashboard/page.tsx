@@ -67,7 +67,7 @@ export default async function DashboardPage() {
       <div>
         <h1 className="text-3xl font-bold">Welcome back, {profile?.full_name || 'there'}!</h1>
         <p className="text-muted-foreground mt-2">
-          Here's an overview of your document processing activity.
+         Here&apos;s an overview of your document processing activity.
         </p>
       </div>
 
