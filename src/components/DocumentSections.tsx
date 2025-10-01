@@ -7,10 +7,33 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion'
 
+type Character = {
+  name: string
+  description: string
+}
+
+type Scene = {
+  heading: string
+  location: string
+  time: string
+}
+
+type Dialogue = {
+  character: string
+  line: string
+  context: string
+}
+
+type SectionContent = {
+  characters?: Character[]
+  scenes?: Scene[]
+  dialogue?: Dialogue[]
+}
+
 type Section = {
   id: string
   section_type: string
-  content: any
+  content: SectionContent
   created_at: string
 }
 
@@ -29,7 +52,7 @@ export function DocumentSections({ sections }: { sections: Section[] }) {
               <div className="space-y-4">
                 {section.section_type === 'CHARACTERS' && (
                   <div className="space-y-3">
-                    {section.content.characters?.map((char: any, i: number) => (
+                    {section.content.characters?.map((char, i) => (
                       <div key={i} className="border-l-2 pl-4">
                         <div className="font-semibold">{char.name}</div>
                         <div className="text-sm text-muted-foreground">
@@ -41,7 +64,7 @@ export function DocumentSections({ sections }: { sections: Section[] }) {
                 )}
                 {section.section_type === 'SCENES' && (
                   <div className="space-y-3">
-                    {section.content.scenes?.map((scene: any, i: number) => (
+                    {section.content.scenes?.map((scene, i) => (
                       <div key={i} className="border-l-2 pl-4">
                         <div className="font-semibold">{scene.heading}</div>
                         <div className="text-sm text-muted-foreground">
@@ -53,7 +76,7 @@ export function DocumentSections({ sections }: { sections: Section[] }) {
                 )}
                 {section.section_type === 'DIALOGUE' && (
                   <div className="space-y-3">
-                    {section.content.dialogue?.map((line: any, i: number) => (
+                    {section.content.dialogue?.map((line, i) => (
                       <div key={i} className="border-l-2 pl-4">
                         <div className="font-semibold">{line.character}</div>
                         <div className="text-sm">{line.line}</div>

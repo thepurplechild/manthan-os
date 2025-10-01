@@ -21,7 +21,7 @@ export function ProcessDocumentButton({ documentId }: { documentId: string }) {
         toast.success('Document analysis started!')
         router.refresh()
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to start analysis')
     } finally {
       setIsProcessing(false)
