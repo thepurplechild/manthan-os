@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getDocumentById, getDocumentViewUrl } from '@/app/actions/documents'
+import { getDocumentViewUrl } from '@/app/actions/documents'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Download } from 'lucide-react'
@@ -42,7 +42,7 @@ export default async function DocumentViewPage({
 
   const viewUrlResult = await getDocumentViewUrl(id)
 
-  if (!viewUrlResult || viewUrlResult.error) {
+  if (!viewUrlResult || viewUrlResult.error || !viewUrlResult.url) {
     return <div>Error loading document</div>
   }
 
