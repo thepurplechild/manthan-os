@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getDocumentById, getDocumentViewUrl } from '@/app/actions/documents'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Download, Sparkles } from 'lucide-react'
+import { ArrowLeft, Download } from 'lucide-react'
 import Link from 'next/link'
 import PDFViewer from '@/components/PDFViewer'
 import { ProcessDocumentButton } from '@/components/ProcessDocumentButton'
@@ -25,9 +25,14 @@ export default async function DocumentViewPage({
     redirect('/login')
   }
 
-  const document = await getDocumentById(id)
+  // Fetch document directly from Supabase
+  const { data: document, error: docError } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('id', id)
+    .single()
 
-  if (!document) {
+  if (docError || !document) {
     notFound()
   }
 
@@ -35,11 +40,13 @@ export default async function DocumentViewPage({
     redirect('/dashboard/documents')
   }
 
-  const viewUrl = await getDocumentViewUrl(id)
+  const viewUrlResult = await getDocumentViewUrl(id)
 
-  if (!viewUrl) {
+  if (!viewUrlResult || viewUrlResult.error) {
     return <div>Error loading document</div>
   }
+
+  const viewUrl = viewUrlResult.url
 
   // Fetch sections if document is completed
   const { data: sections } = await supabase

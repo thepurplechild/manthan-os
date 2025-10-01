@@ -3,18 +3,37 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export async function getDocuments() {
+export async function getDocumentViewUrl(documentId: string) {
   const supabase = await createClient()
 
-  // Get authenticated user
   const {
     data: { user },
-    error: authError,
   } = await supabase.auth.getUser()
 
-  if (authError || !user) {
+  if (!user) {
     return { error: 'Unauthorized' }
   }
+
+  const { data: document, error: docError } = await supabase
+    .from('documents')
+    .select('storage_path')
+    .eq('id', documentId)
+    .single()
+
+  if (docError || !document) {
+    return { error: 'Document not found' }
+  }
+
+  const { data, error } = await supabase.storage
+    .from('creator-assets')
+    .createSignedUrl(document.storage_path, 3600)
+
+  if (error || !data) {
+    return { error: 'Failed to generate URL' }
+  }
+
+  return { url: data.signedUrl }
+}
 
   // Fetch all documents for the user
   const { data: documents, error } = await supabase
