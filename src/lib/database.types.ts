@@ -12,6 +12,7 @@ export interface Database {
           storage_path: string
           file_size_bytes: number
           processing_status: string
+          extracted_text: string | null
           created_at: string
         }
         Insert: {
@@ -22,6 +23,7 @@ export interface Database {
           storage_path: string
           file_size_bytes: number
           processing_status?: string
+          extracted_text?: string | null
           created_at?: string
         }
         Update: {
@@ -32,6 +34,7 @@ export interface Database {
           storage_path?: string
           file_size_bytes?: number
           processing_status?: string
+          extracted_text?: string | null
           created_at?: string
         }
       }

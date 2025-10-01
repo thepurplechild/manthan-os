@@ -8,16 +8,38 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { toast } from 'sonner'
 import { Upload, File, CheckCircle2, X } from 'lucide-react'
+import * as pdfjsLib from 'pdfjs-dist'
+
+// Configure PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
 
 interface SelectedFile {
   file: File
   preview: string
+  extractedText?: string
 }
 
 export default function UploadPage() {
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [isExtracting, setIsExtracting] = useState(false)
+
+  // Text extraction function for PDFs
+  async function extractTextFromPDF(file: File): Promise<string> {
+    const arrayBuffer = await file.arrayBuffer()
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+    let fullText = ''
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i)
+      const textContent = await page.getTextContent()
+      const pageText = textContent.items.map((item: { str: string }) => item.str).join(' ')
+      fullText += pageText + '\n'
+    }
+
+    return fullText
+  }
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
@@ -27,7 +49,7 @@ export default function UploadPage() {
     },
     maxSize: 50 * 1024 * 1024, // 50MB
     multiple: false,
-    onDrop: (acceptedFiles, rejectedFiles) => {
+    onDrop: async (acceptedFiles, rejectedFiles) => {
       if (rejectedFiles.length > 0) {
         const error = rejectedFiles[0].errors[0]
         if (error.code === 'file-too-large') {
@@ -40,10 +62,30 @@ export default function UploadPage() {
 
       if (acceptedFiles.length > 0) {
         const file = acceptedFiles[0]
-        setSelectedFiles([{
+        const selectedFile: SelectedFile = {
           file,
           preview: URL.createObjectURL(file)
-        }])
+        }
+
+        setSelectedFiles([selectedFile])
+
+        // Extract text from PDF
+        if (file.type === 'application/pdf') {
+          setIsExtracting(true)
+          try {
+            const extractedText = await extractTextFromPDF(file)
+            setSelectedFiles([{
+              ...selectedFile,
+              extractedText
+            }])
+            toast.success('Text extracted successfully from PDF!')
+          } catch (error) {
+            toast.error('Failed to extract text from PDF')
+            console.error('PDF extraction error:', error)
+          } finally {
+            setIsExtracting(false)
+          }
+        }
       }
     }
   })
@@ -58,9 +100,15 @@ export default function UploadPage() {
   const handleUpload = async () => {
     if (selectedFiles.length === 0) return
 
-    const file = selectedFiles[0].file
+    const selectedFile = selectedFiles[0]
+    const file = selectedFile.file
     const formData = new FormData()
     formData.append('file', file)
+
+    // Add extracted text if available
+    if (selectedFile.extractedText) {
+      formData.append('extractedText', selectedFile.extractedText)
+    }
 
     setIsUploading(true)
     setUploadProgress(0)
@@ -172,12 +220,38 @@ export default function UploadPage() {
                       variant="ghost"
                       size="sm"
                       onClick={removeFile}
-                      disabled={isUploading}
+                      disabled={isUploading || isExtracting}
                     >
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
+
+                {/* Text Extraction Progress */}
+                {isExtracting && (
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      <span className="text-sm text-blue-700">Extracting text from PDF...</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Text Preview */}
+                {selectedFiles[0].extractedText && !isExtracting && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-gray-900">Text Preview</h4>
+                    <div className="bg-gray-50 rounded-lg p-4 border">
+                      <p className="text-xs text-gray-600 mb-2">
+                        {selectedFiles[0].extractedText.length.toLocaleString()} characters extracted
+                      </p>
+                      <div className="text-sm text-gray-700 max-h-32 overflow-y-auto">
+                        {selectedFiles[0].extractedText.slice(0, 500)}
+                        {selectedFiles[0].extractedText.length > 500 && '...'}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -196,7 +270,7 @@ export default function UploadPage() {
             <div className="flex justify-end">
               <Button
                 onClick={handleUpload}
-                disabled={selectedFiles.length === 0 || isUploading}
+                disabled={selectedFiles.length === 0 || isUploading || isExtracting}
                 className="min-w-[120px]"
               >
                 {isUploading ? (
