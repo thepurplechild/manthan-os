@@ -1,5 +1,13 @@
 'use client'
 
+import dynamic from 'next/dynamic'
+
+// Prevent SSR for this component since it uses browser-only APIs
+export default dynamic(() => Promise.resolve(UploadPageContent), {
+  ssr: false,
+})
+
+function UploadPageContent() {
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDropzone } from 'react-dropzone'
