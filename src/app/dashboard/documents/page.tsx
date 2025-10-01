@@ -153,7 +153,7 @@ export default function DocumentsPage() {
   } catch {
     toast.error('Failed to download document')
   }
-
+}
 
   const handleView = (document: Document) => {
     router.push(`/dashboard/documents/${document.id}`)
