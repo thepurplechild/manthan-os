@@ -21,36 +21,23 @@ export async function processDocument(documentId: string) {
       .update({ processing_status: 'PROCESSING' })
       .eq('id', documentId)
 
-    // Get document
+    // Get document with extracted text
     const { data: document, error: docError } = await supabase
       .from('documents')
-      .select('*')
+      .select('*, extracted_text')
       .eq('id', documentId)
       .single()
 
     if (docError || !document) {
-      return { error: 'Document not found' }
+      throw new Error('Document not found')
     }
 
-    // Get signed URL
-    const { data: urlData, error: urlError } = await supabase.storage
-      .from('creator-assets')
-      .createSignedUrl(document.storage_path, 3600)
-
-    if (urlError || !urlData) {
-      throw new Error('Failed to get document URL')
+    // Validate extracted text exists
+    if (!document.extracted_text || document.extracted_text.trim() === '') {
+      throw new Error('No text found in document. Please re-upload.')
     }
 
-    // Download PDF
-    const response = await fetch(urlData.signedUrl)
-    const arrayBuffer = await response.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
-
-    // Import pdf-parse only when needed
-    const pdf = await import('pdf-parse')
-    const data = await pdf.default(buffer)
-
-    const text = data.text
+    const text = document.extracted_text
 
     // Send to OpenAI
     const { default: OpenAI } = await import('openai')
