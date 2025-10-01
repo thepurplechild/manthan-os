@@ -1,6 +1,3 @@
-// Force redeploy v2
-import Link from 'next/link'
-
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 
@@ -16,17 +13,13 @@ export default function Home() {
             AI-Native Media Operating System
           </p>
         </div>
-
+        
         <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
-          <Button asChild size="lg" className="min-w-[120px]">
-            <Link href="/login">
-              Sign In
-            </Link>
+          <Button asChild size="lg">
+            <Link href="/login">Sign In</Link>
           </Button>
-          <Button asChild variant="outline" size="lg" className="min-w-[120px]">
-            <Link href="/signup">
-              Get Started
-            </Link>
+          <Button asChild variant="outline" size="lg">
+            <Link href="/signup">Get Started</Link>
           </Button>
         </div>
       </div>
