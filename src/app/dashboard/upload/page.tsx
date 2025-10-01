@@ -1,13 +1,5 @@
 'use client'
 
-import dynamic from 'next/dynamic'
-
-// Prevent SSR for this component since it uses browser-only APIs
-export default dynamic(() => Promise.resolve(UploadPageContent), {
-  ssr: false,
-})
-
-function UploadPageContent() {
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDropzone } from 'react-dropzone'
@@ -17,10 +9,17 @@ import { Progress } from '@/components/ui/progress'
 import { Upload, X, FileText, Loader2 } from 'lucide-react'
 import { uploadDocument } from '@/app/actions/upload'
 import { toast } from 'sonner'
-import * as pdfjsLib from 'pdfjs-dist'
+import dynamic from 'next/dynamic'
 
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+// This component uses browser-only APIs, so we prevent SSR
+const UploadPageContent = dynamic(() => Promise.resolve(UploadPageImpl), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center min-h-screen">
+      <Loader2 className="h-8 w-8 animate-spin" />
+    </div>
+  ),
+})
 
 type SelectedFile = {
   file: File
@@ -28,7 +27,7 @@ type SelectedFile = {
   extractedText?: string
 }
 
-export default function UploadPage() {
+function UploadPageImpl() {
   const router = useRouter()
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([])
   const [isUploading, setIsUploading] = useState(false)
@@ -37,6 +36,10 @@ export default function UploadPage() {
 
   // Text extraction function for PDFs
   async function extractTextFromPDF(file: File): Promise<string> {
+    // Dynamically import pdfjs-dist to avoid SSR issues
+    const pdfjsLib = await import('pdfjs-dist')
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+
     const arrayBuffer = await file.arrayBuffer()
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
     let fullText = ''
@@ -64,7 +67,7 @@ export default function UploadPage() {
       'text/plain': ['.txt'],
       'text/markdown': ['.md'],
     },
-    maxSize: 50 * 1024 * 1024, // 50MB
+    maxSize: 50 * 1024 * 1024,
     multiple: false,
     onDrop: async (acceptedFiles, rejectedFiles) => {
       if (rejectedFiles.length > 0) {
@@ -86,18 +89,17 @@ export default function UploadPage() {
 
         setSelectedFiles([selectedFile])
 
-        // Extract text from PDF
         if (file.type === 'application/pdf') {
           setIsExtracting(true)
           try {
             const extractedText = await extractTextFromPDF(file)
-            
+
             if (!extractedText || extractedText.trim().length === 0) {
               toast.error('No text found in PDF. Please ensure the PDF contains extractable text.')
               setSelectedFiles([])
               return
             }
-            
+
             setSelectedFiles([
               {
                 ...selectedFile,
@@ -132,7 +134,6 @@ export default function UploadPage() {
     const formData = new FormData()
     formData.append('file', file)
 
-    // Add extracted text if available
     if (selectedFile.extractedText) {
       formData.append('extractedText', selectedFile.extractedText)
     }
@@ -141,7 +142,6 @@ export default function UploadPage() {
     setUploadProgress(0)
 
     try {
-      // Simulate progress
       const progressInterval = setInterval(() => {
         setUploadProgress((prev) => {
           if (prev >= 90) {
@@ -232,17 +232,11 @@ export default function UploadPage() {
                     </p>
                     {selectedFile.extractedText && (
                       <p className="text-sm text-muted-foreground mt-1">
-                        Extracted: {selectedFile.extractedText.length.toLocaleString()}{' '}
-                        characters
+                        Extracted: {selectedFile.extractedText.length.toLocaleString()} characters
                       </p>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={removeFile}
-                    disabled={isUploading}
-                  >
+                  <Button variant="ghost" size="sm" onClick={removeFile} disabled={isUploading}>
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
@@ -268,11 +262,7 @@ export default function UploadPage() {
                 </div>
               )}
 
-              <Button
-                onClick={handleUpload}
-                disabled={isUploading || isExtracting}
-                className="w-full"
-              >
+              <Button onClick={handleUpload} disabled={isUploading || isExtracting} className="w-full">
                 {isUploading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -304,9 +294,7 @@ export default function UploadPage() {
             </li>
             <li className="flex items-start gap-2">
               <span className="text-primary">•</span>
-              <span>
-                You&apos;ll be able to generate casting suggestions and breakdowns
-              </span>
+              <span>You&apos;ll be able to generate casting suggestions and breakdowns</span>
             </li>
           </ul>
         </CardContent>
@@ -314,3 +302,5 @@ export default function UploadPage() {
     </div>
   )
 }
+
+export default UploadPageContent
