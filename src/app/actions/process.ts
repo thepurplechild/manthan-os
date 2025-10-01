@@ -2,156 +2,121 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import OpenAI from 'openai'
-import pdf from 'pdf-parse'
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
-
-interface AnalysisResult {
-  characters: Array<{
-    name: string
-    description: string
-  }>
-  scenes: Array<{
-    heading: string
-    location: string
-    timeOfDay?: string
-  }>
-  dialogue: Array<{
-    character: string
-    text: string
-    context?: string
-  }>
-}
 
 export async function processDocument(documentId: string) {
   const supabase = await createClient()
 
-  // Get authenticated user
   const {
     data: { user },
-    error: authError,
   } = await supabase.auth.getUser()
 
-  if (authError || !user) {
+  if (!user) {
     return { error: 'Unauthorized' }
   }
 
   try {
-    // Fetch document
+    // Update status to PROCESSING
+    await supabase
+      .from('documents')
+      .update({ processing_status: 'PROCESSING' })
+      .eq('id', documentId)
+
+    // Get document
     const { data: document, error: docError } = await supabase
       .from('documents')
       .select('*')
       .eq('id', documentId)
-      .eq('owner_id', user.id)
       .single()
 
     if (docError || !document) {
       return { error: 'Document not found' }
     }
 
-    // Check if document is in correct status
-    if (document.processing_status !== 'UPLOADED') {
-      return { error: 'Document is not in uploadable status' }
-    }
-
-    // Update status to processing
-    await supabase
-      .from('documents')
-      .update({ processing_status: 'PROCESSING' })
-      .eq('id', documentId)
-
-    // Get signed URL for download
-    const { data: signedUrlData, error: urlError } = await supabase.storage
+    // Get signed URL
+    const { data: urlData, error: urlError } = await supabase.storage
       .from('creator-assets')
       .createSignedUrl(document.storage_path, 3600)
 
-    if (urlError || !signedUrlData?.signedUrl) {
-      throw new Error('Failed to get signed URL for document')
+    if (urlError || !urlData) {
+      throw new Error('Failed to get document URL')
     }
 
-    // Download PDF content
-    const response = await fetch(signedUrlData.signedUrl)
-    if (!response.ok) {
-      throw new Error('Failed to download document')
-    }
+    // Download PDF
+    const response = await fetch(urlData.signedUrl)
+    const arrayBuffer = await response.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
 
-    const buffer = await response.arrayBuffer()
-    const pdfData = await pdf(Buffer.from(buffer))
-    const textContent = pdfData.text
+    // Import pdf-parse only when needed
+    const pdf = await import('pdf-parse')
+    const data = await pdf.default(buffer)
 
-    if (!textContent.trim()) {
-      throw new Error('No text content found in document')
-    }
+    const text = data.text
 
-    // Send to OpenAI for analysis
+    // Send to OpenAI
+    const { default: OpenAI } = await import('openai')
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    })
+
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
-          content: 'You are a screenplay analyzer. Extract structured data from scripts and return valid JSON only. Focus on characters with descriptions, scene headings with locations, and key dialogue exchanges.'
+          content:
+            'You are a screenplay analyzer. Extract structured data from scripts and return valid JSON only.',
         },
         {
           role: 'user',
-          content: `Analyze this screenplay text and return JSON with the following structure:
+          content: `Analyze this screenplay and extract:
+1. All CHARACTER names with brief descriptions
+2. All SCENE headings with locations and times
+3. Key DIALOGUE exchanges (5-10 most important)
+
+Return as JSON with this exact structure:
 {
-  "characters": [{"name": "string", "description": "string"}],
-  "scenes": [{"heading": "string", "location": "string", "timeOfDay": "string"}],
-  "dialogue": [{"character": "string", "text": "string", "context": "string"}]
+  "characters": [{"name": "CHARACTER NAME", "description": "brief description"}],
+  "scenes": [{"heading": "SCENE HEADING", "location": "location", "time": "DAY/NIGHT"}],
+  "dialogue": [{"character": "CHARACTER", "line": "dialogue text", "context": "context"}]
 }
 
-Text to analyze:
-${textContent}`
-        }
+Script text:
+${text.slice(0, 50000)}`,
+        },
       ],
-      max_tokens: 4000,
-      temperature: 0.1
     })
 
-    const analysisText = completion.choices[0]?.message?.content
-    if (!analysisText) {
-      throw new Error('No response from OpenAI')
-    }
+    const result = JSON.parse(completion.choices[0].message.content || '{}')
 
-    let analysisResult: AnalysisResult
-    try {
-      analysisResult = JSON.parse(analysisText)
-    } catch {
-      throw new Error('Invalid JSON response from OpenAI')
-    }
-
-    // Store results in document_sections table
-    const sectionsToInsert = [
+    // Store sections
+    const sections = [
       {
         document_id: documentId,
-        section_type: 'characters',
-        content: analysisResult.characters
+        section_type: 'CHARACTERS',
+        content: { characters: result.characters || [] },
       },
       {
         document_id: documentId,
-        section_type: 'scenes',
-        content: analysisResult.scenes
+        section_type: 'SCENES',
+        content: { scenes: result.scenes || [] },
       },
       {
         document_id: documentId,
-        section_type: 'dialogue',
-        content: analysisResult.dialogue
-      }
+        section_type: 'DIALOGUE',
+        content: { dialogue: result.dialogue || [] },
+      },
     ]
 
-    const { error: insertError } = await supabase
+    const { error: sectionsError } = await supabase
       .from('document_sections')
-      .insert(sectionsToInsert)
+      .insert(sections)
 
-    if (insertError) {
-      throw new Error(`Failed to store analysis results: ${insertError.message}`)
+    if (sectionsError) {
+      throw new Error('Failed to save analysis results')
     }
 
-    // Update document status to completed
+    // Update status to COMPLETED
     await supabase
       .from('documents')
       .update({ processing_status: 'COMPLETED' })
@@ -160,18 +125,14 @@ ${textContent}`
     revalidatePath(`/dashboard/documents/${documentId}`)
     revalidatePath('/dashboard/documents')
 
-    return { success: true, analysis: analysisResult }
-
+    return { success: true }
   } catch (error) {
-    // Update document status to failed
+    // Update status to FAILED
     await supabase
       .from('documents')
       .update({ processing_status: 'FAILED' })
       .eq('id', documentId)
 
-    console.error('Document processing error:', error)
-    return {
-      error: error instanceof Error ? error.message : 'Processing failed'
-    }
+    return { error: error instanceof Error ? error.message : 'Processing failed' }
   }
 }
