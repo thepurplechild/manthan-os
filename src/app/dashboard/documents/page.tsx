@@ -133,23 +133,27 @@ export default function DocumentsPage() {
   }
 
   const handleDownload = async (documentId: string) => {
-    try {
-      const result = await getDocumentDownloadUrl(documentId)
-      if (result.error) {
-        setError(result.error)
-      } else {
-        // Create a temporary link and trigger download
-        const link = document.createElement('a')
-        link.href = result.downloadUrl!
-        link.download = result.filename!
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-      }
-    } catch {
-      setError('Failed to download document')
+  try {
+    const result = await getDocumentDownloadUrl(documentId)
+    
+    if (result.error) {
+      toast.error(result.error)
+      return
     }
+
+    // Create a temporary link and trigger download
+    const link = document.createElement('a')
+    link.href = result.url
+    link.download = result.title
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    
+    toast.success('Download started')
+  } catch {
+    toast.error('Failed to download document')
   }
+
 
   const handleView = (document: Document) => {
     router.push(`/dashboard/documents/${document.id}`)
