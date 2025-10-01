@@ -9,6 +9,8 @@ export interface Database {
           owner_id: string
           title: string
           storage_url: string
+          storage_path: string
+          file_size_bytes: number
           processing_status: string
           created_at: string
         }
@@ -17,6 +19,8 @@ export interface Database {
           owner_id: string
           title: string
           storage_url: string
+          storage_path: string
+          file_size_bytes: number
           processing_status?: string
           created_at?: string
         }
@@ -25,6 +29,8 @@ export interface Database {
           owner_id?: string
           title?: string
           storage_url?: string
+          storage_path?: string
+          file_size_bytes?: number
           processing_status?: string
           created_at?: string
         }
