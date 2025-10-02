@@ -1,5 +1,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
+export type ProcessingStatus = 'UPLOADED' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+
 export interface Database {
   public: {
     Tables: {
@@ -11,7 +13,7 @@ export interface Database {
           storage_url: string
           storage_path: string
           file_size_bytes: number
-          processing_status: string
+          processing_status: ProcessingStatus
           extracted_text: string | null
           created_at: string
         }
@@ -22,7 +24,7 @@ export interface Database {
           storage_url: string
           storage_path: string
           file_size_bytes: number
-          processing_status?: string
+          processing_status?: ProcessingStatus
           extracted_text?: string | null
           created_at?: string
         }
@@ -33,7 +35,7 @@ export interface Database {
           storage_url?: string
           storage_path?: string
           file_size_bytes?: number
-          processing_status?: string
+          processing_status?: ProcessingStatus
           extracted_text?: string | null
           created_at?: string
         }

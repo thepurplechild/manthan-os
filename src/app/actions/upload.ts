@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import type { ProcessingStatus } from '@/lib/database.types'
 
 export async function uploadDocument(formData: FormData) {
   const supabase = await createClient()
@@ -21,8 +22,6 @@ export async function uploadDocument(formData: FormData) {
     return { error: 'No file provided' }
   }
 
-  const extractedText = formData.get('extractedText') as string | null
-
   // Validate file size (50MB)
   if (file.size > 50 * 1024 * 1024) {
     return { error: 'File size exceeds 50MB limit' }
@@ -32,11 +31,6 @@ export async function uploadDocument(formData: FormData) {
   const allowedTypes = ['application/pdf', 'text/plain', 'text/markdown']
   if (!allowedTypes.includes(file.type)) {
     return { error: 'Invalid file type. Only PDF, TXT, and MD files are allowed' }
-  }
-
-  // Validate extracted text for PDFs
-  if (file.type === 'application/pdf' && (!extractedText || extractedText.trim().length === 0)) {
-    return { error: 'Text extraction failed. Please ensure the PDF contains readable text.' }
   }
 
   // Create unique file path with user ID
@@ -70,8 +64,8 @@ export async function uploadDocument(formData: FormData) {
       storage_url: publicUrl,
       storage_path: filePath,
       file_size_bytes: file.size,
-      processing_status: 'UPLOADED',
-      extracted_text: extractedText,
+      processing_status: 'UPLOADED' as ProcessingStatus,
+      extracted_text: null,
     })
     .select()
     .single()

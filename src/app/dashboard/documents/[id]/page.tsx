@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Download } from 'lucide-react'
 import Link from 'next/link'
-import PDFViewer from '@/components/PDFViewer'
+import ClientPDFViewer from '@/components/ClientPDFViewer'
 import { ProcessDocumentButton } from '@/components/ProcessDocumentButton'
 import { DocumentSections } from '@/components/DocumentSections'
 
@@ -126,7 +126,7 @@ export default async function DocumentViewPage({
       )}
 
       <div className="bg-card border rounded-lg p-4">
-        <PDFViewer url={viewUrl} />
+        <ClientPDFViewer url={viewUrl} />
       </div>
     </div>
   )

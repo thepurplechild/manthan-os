@@ -9,61 +9,17 @@ import { Progress } from '@/components/ui/progress'
 import { Upload, X, FileText, Loader2 } from 'lucide-react'
 import { uploadDocument } from '@/app/actions/upload'
 import { toast } from 'sonner'
-import dynamic from 'next/dynamic'
-import * as pdfjs from 'pdfjs-dist'
-
-// This component uses browser-only APIs, so we prevent SSR
-const UploadPageContent = dynamic(() => Promise.resolve(UploadPageImpl), {
-  ssr: false,
-  loading: () => (
-    <div className="flex items-center justify-center min-h-screen">
-      <Loader2 className="h-8 w-8 animate-spin" />
-    </div>
-  ),
-})
 
 type SelectedFile = {
   file: File
   preview: string
-  extractedText?: string
 }
 
 function UploadPageImpl() {
   const router = useRouter()
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([])
   const [isUploading, setIsUploading] = useState(false)
-  const [isExtracting, setIsExtracting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
-
-  // Text extraction function for PDFs
-  async function extractTextFromPDF(file: File): Promise<string> {
-    // Dynamically import pdfjs-dist to avoid SSR issues
-    const pdfjsLib = await import('pdfjs-dist')
-    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-      'pdfjs-dist/build/pdf.worker.min.mjs',
-      import.meta.url
-    ).toString()
-
-    const arrayBuffer = await file.arrayBuffer()
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
-    let fullText = ''
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i)
-      const textContent = await page.getTextContent()
-      const pageText = textContent.items
-        .map((item) => {
-          if ('str' in item) {
-            return item.str
-          }
-          return ''
-        })
-        .join(' ')
-      fullText += pageText + '\n'
-    }
-
-    return fullText
-  }
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
@@ -92,33 +48,7 @@ function UploadPageImpl() {
         }
 
         setSelectedFiles([selectedFile])
-
-        if (file.type === 'application/pdf') {
-          setIsExtracting(true)
-          try {
-            const extractedText = await extractTextFromPDF(file)
-
-            if (!extractedText || extractedText.trim().length === 0) {
-              toast.error('No text found in PDF. Please ensure the PDF contains extractable text.')
-              setSelectedFiles([])
-              return
-            }
-
-            setSelectedFiles([
-              {
-                ...selectedFile,
-                extractedText,
-              },
-            ])
-            toast.success('Text extracted successfully from PDF!')
-          } catch (error) {
-            toast.error('Failed to extract text from PDF')
-            console.error('PDF extraction error:', error)
-            setSelectedFiles([])
-          } finally {
-            setIsExtracting(false)
-          }
-        }
+        toast.success('File selected successfully!')
       }
     },
   })
@@ -137,10 +67,6 @@ function UploadPageImpl() {
     const file = selectedFile.file
     const formData = new FormData()
     formData.append('file', file)
-
-    if (selectedFile.extractedText) {
-      formData.append('extractedText', selectedFile.extractedText)
-    }
 
     setIsUploading(true)
     setUploadProgress(0)
@@ -164,11 +90,23 @@ function UploadPageImpl() {
       if (result.error) {
         toast.error(result.error)
       } else {
-        toast.success('Document uploaded successfully!')
+        // Trigger background processing
+        try {
+          await fetch('/api/inngest/trigger', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              event: 'document/text.extract',
+              data: { documentId: result.document.id }
+            })
+          })
+        } catch (triggerError) {
+          console.error('Failed to trigger background processing:', triggerError)
+        }
+
+        toast.success('File uploaded! Extracting text in background...')
         removeFile()
-        setTimeout(() => {
-          router.push('/dashboard/documents')
-        }, 1000)
+        router.push('/dashboard/documents')
       }
     } catch (error) {
       toast.error('Upload failed. Please try again.')
@@ -209,21 +147,7 @@ function UploadPageImpl() {
             </p>
           </div>
 
-          {isExtracting && (
-            <div className="mt-6 p-4 border rounded-lg bg-muted/50">
-              <div className="flex items-center gap-3">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                <div className="flex-1">
-                  <p className="font-medium">Extracting text from PDF...</p>
-                  <p className="text-sm text-muted-foreground">
-                    This may take a moment for large files
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {selectedFiles.length > 0 && !isExtracting && (
+          {selectedFiles.length > 0 && (
             <div className="mt-6 space-y-4">
               <h3 className="font-semibold">Selected File</h3>
               {selectedFiles.map((selectedFile, index) => (
@@ -234,27 +158,12 @@ function UploadPageImpl() {
                     <p className="text-sm text-muted-foreground">
                       {(selectedFile.file.size / 1024).toFixed(2)} KB
                     </p>
-                    {selectedFile.extractedText && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Extracted: {selectedFile.extractedText.length.toLocaleString()} characters
-                      </p>
-                    )}
                   </div>
                   <Button variant="ghost" size="sm" onClick={removeFile} disabled={isUploading}>
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
               ))}
-
-              {selectedFiles[0]?.extractedText && (
-                <div className="p-4 border rounded-lg bg-muted/50">
-                  <p className="text-sm font-medium mb-2">Text Preview:</p>
-                  <p className="text-sm text-muted-foreground line-clamp-3">
-                    {selectedFiles[0].extractedText.slice(0, 500)}
-                    {selectedFiles[0].extractedText.length > 500 && '...'}
-                  </p>
-                </div>
-              )}
 
               {isUploading && (
                 <div className="space-y-2">
@@ -266,7 +175,7 @@ function UploadPageImpl() {
                 </div>
               )}
 
-              <Button onClick={handleUpload} disabled={isUploading || isExtracting} className="w-full">
+              <Button onClick={handleUpload} disabled={isUploading} className="w-full">
                 {isUploading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -290,15 +199,15 @@ function UploadPageImpl() {
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li className="flex items-start gap-2">
               <span className="text-primary">•</span>
-              <span>Your script will be securely stored and processed</span>
+              <span>Your script will be securely stored and processed in the background</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-primary">•</span>
-              <span>AI analysis will extract characters, scenes, and dialogue</span>
+              <span>Text extraction and AI analysis will happen automatically</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-primary">•</span>
-              <span>You&apos;ll be able to generate casting suggestions and breakdowns</span>
+              <span>You&apos;ll be notified when processing is complete</span>
             </li>
           </ul>
         </CardContent>
@@ -307,4 +216,4 @@ function UploadPageImpl() {
   )
 }
 
-export default UploadPageContent
+export default UploadPageImpl

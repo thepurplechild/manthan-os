@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import type { ProcessingStatus } from '@/lib/database.types'
 
 export async function processDocument(documentId: string) {
   console.log('🔄 Server Action: processDocument called with documentId:', documentId)
@@ -24,7 +25,7 @@ export async function processDocument(documentId: string) {
     console.log('📊 Server Action: Updating document status to PROCESSING...')
     const statusUpdateResult = await supabase
       .from('documents')
-      .update({ processing_status: 'PROCESSING' })
+      .update({ processing_status: 'PROCESSING' as ProcessingStatus })
       .eq('id', documentId)
 
     if (statusUpdateResult.error) {
@@ -178,7 +179,7 @@ ${text.slice(0, 50000)}`,
     console.log('🏁 Server Action: Updating document status to COMPLETED...')
     const finalStatusUpdate = await supabase
       .from('documents')
-      .update({ processing_status: 'COMPLETED' })
+      .update({ processing_status: 'COMPLETED' as ProcessingStatus })
       .eq('id', documentId)
 
     if (finalStatusUpdate.error) {
@@ -200,7 +201,7 @@ ${text.slice(0, 50000)}`,
     console.log('🚨 Server Action: Updating document status to FAILED...')
     const failedStatusUpdate = await supabase
       .from('documents')
-      .update({ processing_status: 'FAILED' })
+      .update({ processing_status: 'FAILED' as ProcessingStatus })
       .eq('id', documentId)
 
     if (failedStatusUpdate.error) {
