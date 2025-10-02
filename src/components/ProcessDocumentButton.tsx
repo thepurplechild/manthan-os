@@ -12,18 +12,26 @@ export function ProcessDocumentButton({ documentId }: { documentId: string }) {
   const router = useRouter()
 
   const handleProcess = async () => {
+    console.log('🚀 ProcessDocumentButton: Starting analysis for document:', documentId)
     setIsProcessing(true)
     try {
+      console.log('📡 ProcessDocumentButton: Calling processDocument server action...')
       const result = await processDocument(documentId)
+      console.log('📨 ProcessDocumentButton: Got result from server action:', result)
+
       if (result.error) {
+        console.error('❌ ProcessDocumentButton: Error from server action:', result.error)
         toast.error(result.error)
       } else {
+        console.log('✅ ProcessDocumentButton: Success! Refreshing router...')
         toast.success('Document analysis started!')
         router.refresh()
       }
-    } catch {
+    } catch (error) {
+      console.error('💥 ProcessDocumentButton: Caught exception:', error)
       toast.error('Failed to start analysis')
     } finally {
+      console.log('🏁 ProcessDocumentButton: Setting isProcessing to false')
       setIsProcessing(false)
     }
   }
