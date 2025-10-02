@@ -135,14 +135,41 @@ ${text.slice(0, 50000)}`,
       },
     ]
 
-    console.log('📤 Server Action: Inserting sections into database:', sections.length, 'sections')
-    const { error: sectionsError } = await supabase
-      .from('document_sections')
-      .insert(sections)
+    console.log('💾 About to insert sections:', {
+      sectionsCount: sections.length,
+      sectionTypes: sections.map(s => s.section_type),
+      sampleContent: sections[0] ? JSON.stringify(sections[0]).substring(0, 200) : 'none'
+    })
 
-    if (sectionsError) {
-      console.error('❌ Server Action: Failed to save sections:', sectionsError)
-      throw new Error('Failed to save analysis results')
+    console.log('📤 Server Action: Inserting sections into database:', sections.length, 'sections')
+
+    try {
+      const { data, error: sectionsError } = await supabase
+        .from('document_sections')
+        .insert(sections)
+        .select()
+
+      if (sectionsError) {
+        console.error('❌ Database insert error DETAILS:', {
+          message: sectionsError.message,
+          details: sectionsError.details,
+          hint: sectionsError.hint,
+          code: sectionsError.code,
+          fullError: JSON.stringify(sectionsError, null, 2)
+        })
+        throw new Error(`Database error: ${sectionsError.message} (${sectionsError.code})`)
+      }
+
+      console.log('✅ Successfully inserted sections:', data?.length || 0, 'records')
+
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      console.error('❌ Exception during insert:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      })
+      throw new Error(`Insert failed: ${error.message}`)
     }
 
     console.log('✅ Server Action: Successfully saved sections to database')
