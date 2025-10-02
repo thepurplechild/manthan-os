@@ -10,6 +10,7 @@ import { Upload, X, FileText, Loader2 } from 'lucide-react'
 import { uploadDocument } from '@/app/actions/upload'
 import { toast } from 'sonner'
 import dynamic from 'next/dynamic'
+import * as pdfjs from 'pdfjs-dist'
 
 // This component uses browser-only APIs, so we prevent SSR
 const UploadPageContent = dynamic(() => Promise.resolve(UploadPageImpl), {
@@ -38,7 +39,10 @@ function UploadPageImpl() {
   async function extractTextFromPDF(file: File): Promise<string> {
     // Dynamically import pdfjs-dist to avoid SSR issues
     const pdfjsLib = await import('pdfjs-dist')
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+      'pdfjs-dist/build/pdf.worker.min.mjs',
+      import.meta.url
+    ).toString()
 
     const arrayBuffer = await file.arrayBuffer()
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
