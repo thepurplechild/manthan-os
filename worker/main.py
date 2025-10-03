@@ -1,9 +1,9 @@
 import os
 import sys
 import logging
+import requests
 from typing import Dict, Any
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -11,49 +11,71 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from supabase import create_client, Client
 from processors.pdf_extractor import extract_text_from_pdf
 from processors.embeddings import generate_embeddings
 
-# Initialize Supabase client with service role
-supabase: Client = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-)
+# Supabase configuration
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+def supabase_request(method: str, endpoint: str, json_data: Dict = None) -> Dict:
+    """Make authenticated request to Supabase REST API"""
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    url = f"{SUPABASE_URL}/rest/v1/{endpoint}"
+    response = requests.request(method, url, headers=headers, json=json_data)
+    response.raise_for_status()
+
+    if response.text:
+        return response.json()
+    return {}
+
+def download_from_storage(storage_path: str) -> bytes:
+    """Download file from Supabase Storage"""
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}"
+    }
+
+    url = f"{SUPABASE_URL}/storage/v1/object/creator-assets/{storage_path}"
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+
+    return response.content
 
 def extract_document_text(document_id: str, storage_path: str) -> Dict[str, Any]:
-    """
-    Extract text from uploaded PDF.
-
-    Args:
-        document_id: Document UUID
-        storage_path: Path in Supabase Storage
-
-    Returns:
-        Result dictionary with success status and metadata
-    """
+    """Extract text from uploaded PDF"""
     try:
         logger.info(f"Starting text extraction for document {document_id}")
 
         # Update status to EXTRACTING
-        supabase.table("documents").update({
-            "processing_status": "EXTRACTING"
-        }).eq("id", document_id).execute()
+        supabase_request(
+            "PATCH",
+            f"documents?id=eq.{document_id}",
+            {"processing_status": "EXTRACTING"}
+        )
 
-        # Download file from Supabase Storage
+        # Download file from Storage
         logger.info(f"Downloading file from {storage_path}")
-        file_data = supabase.storage.from_("creator-assets").download(storage_path)
+        file_data = download_from_storage(storage_path)
 
         # Extract text
         extracted_text = extract_text_from_pdf(file_data)
-
         logger.info(f"Extracted {len(extracted_text)} characters")
 
         # Update document with extracted text
-        supabase.table("documents").update({
-            "extracted_text": extracted_text,
-            "processing_status": "EXTRACTED"
-        }).eq("id", document_id).execute()
+        supabase_request(
+            "PATCH",
+            f"documents?id=eq.{document_id}",
+            {
+                "extracted_text": extracted_text,
+                "processing_status": "EXTRACTED"
+            }
+        )
 
         return {
             "success": True,
@@ -65,9 +87,14 @@ def extract_document_text(document_id: str, storage_path: str) -> Dict[str, Any]
         logger.error(f"Text extraction failed for {document_id}: {str(e)}", exc_info=True)
 
         # Update status to failed
-        supabase.table("documents").update({
-            "processing_status": "EXTRACTION_FAILED"
-        }).eq("id", document_id).execute()
+        try:
+            supabase_request(
+                "PATCH",
+                f"documents?id=eq.{document_id}",
+                {"processing_status": "EXTRACTION_FAILED"}
+            )
+        except:
+            pass
 
         return {
             "success": False,
@@ -75,40 +102,38 @@ def extract_document_text(document_id: str, storage_path: str) -> Dict[str, Any]
         }
 
 def generate_document_embeddings(document_id: str) -> Dict[str, Any]:
-    """
-    Generate embeddings for document chunks.
-
-    Args:
-        document_id: Document UUID
-
-    Returns:
-        Result dictionary with success status and metadata
-    """
+    """Generate embeddings for document chunks"""
     try:
         logger.info(f"Starting embedding generation for document {document_id}")
 
         # Update status
-        supabase.table("documents").update({
-            "processing_status": "EMBEDDING"
-        }).eq("id", document_id).execute()
+        supabase_request(
+            "PATCH",
+            f"documents?id=eq.{document_id}",
+            {"processing_status": "EMBEDDING"}
+        )
 
         # Get document text
-        doc = supabase.table("documents").select("extracted_text").eq("id", document_id).single().execute()
+        doc = supabase_request(
+            "GET",
+            f"documents?id=eq.{document_id}&select=extracted_text"
+        )
 
-        if not doc.data or not doc.data.get("extracted_text"):
+        if not doc or not doc[0].get("extracted_text"):
             raise Exception("No extracted text found")
 
-        text = doc.data["extracted_text"]
+        text = doc[0]["extracted_text"]
 
         # Generate embeddings and store
-        num_chunks = generate_embeddings(document_id, text, supabase)
-
+        num_chunks = generate_embeddings(document_id, text)
         logger.info(f"Generated embeddings for {num_chunks} chunks")
 
         # Update status to READY
-        supabase.table("documents").update({
-            "processing_status": "READY"
-        }).eq("id", document_id).execute()
+        supabase_request(
+            "PATCH",
+            f"documents?id=eq.{document_id}",
+            {"processing_status": "READY"}
+        )
 
         return {
             "success": True,
@@ -119,9 +144,14 @@ def generate_document_embeddings(document_id: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Embedding generation failed for {document_id}: {str(e)}", exc_info=True)
 
-        supabase.table("documents").update({
-            "processing_status": "EMBEDDING_FAILED"
-        }).eq("id", document_id).execute()
+        try:
+            supabase_request(
+                "PATCH",
+                f"documents?id=eq.{document_id}",
+                {"processing_status": "EMBEDDING_FAILED"}
+            )
+        except:
+            pass
 
         return {
             "success": False,
