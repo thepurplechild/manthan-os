@@ -5,8 +5,9 @@ from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-# Initialize Voyage AI client
-vo = voyageai.Client(api_key=os.getenv("VOYAGE_API_KEY"))
+def get_voyage_client():
+    """Get or create Voyage AI client."""
+    return voyageai.Client(api_key=os.getenv("VOYAGE_API_KEY"))
 
 def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[Dict[str, Any]]:
     """
@@ -75,6 +76,7 @@ def generate_embeddings(document_id: str, text: str, supabase) -> int:
             logger.info(f"Generating embeddings for batch {i//batch_size + 1} ({len(batch_texts)} chunks)")
 
             # Call Voyage AI API
+            vo = get_voyage_client()
             result = vo.embed(
                 batch_texts,
                 model="voyage-3-lite",  # 512 dimensions
