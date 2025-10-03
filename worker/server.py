@@ -71,12 +71,7 @@ def verify_auth():
 @app.route("/health", methods=["GET"])
 def health():
     """Health check."""
-    return jsonify({
-        "status": "healthy",
-        "service": "manthan-worker",
-        "version": "1.0.0",
-        "python_version": sys.version
-    })
+    return jsonify({"status": "ok"})
 
 @app.route("/extract", methods=["POST"])
 def extract():
