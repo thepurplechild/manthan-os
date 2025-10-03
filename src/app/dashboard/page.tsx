@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { FileText, Clock, CheckCircle } from 'lucide-react'
+import SemanticSearch from '@/components/SemanticSearch'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -70,6 +71,9 @@ export default async function DashboardPage() {
          Here&apos;s an overview of your document processing activity.
         </p>
       </div>
+
+      {/* Semantic Search Component */}
+      {(totalDocs || 0) > 0 && <SemanticSearch />}
 
       <div className="grid gap-4 md:grid-cols-3">
         {stats.map((stat) => {
