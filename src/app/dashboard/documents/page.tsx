@@ -63,9 +63,19 @@ const formatDate = (dateString: string): string => {
 const getStatusBadge = (status: string) => {
   switch (status) {
     case 'UPLOADED':
-      return <Badge variant="processing">Uploaded</Badge>
+      return (
+        <Badge variant="processing" className="animate-pulse">
+          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+          Uploaded
+        </Badge>
+      )
     case 'PROCESSING':
-      return <Badge variant="warning">Processing</Badge>
+      return (
+        <Badge variant="warning" className="animate-pulse">
+          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+          Processing
+        </Badge>
+      )
     case 'COMPLETED':
       return <Badge variant="success">Completed</Badge>
     case 'FAILED':
@@ -82,6 +92,8 @@ export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [isMobile, setIsMobile] = useState(false)
+  const [isPolling, setIsPolling] = useState(false)
+  const [previousDocuments, setPreviousDocuments] = useState<Document[]>([])
 
   useEffect(() => {
     const checkScreenSize = () => {
@@ -98,13 +110,77 @@ export default function DocumentsPage() {
     fetchDocuments()
   }, [])
 
+  // Polling logic for processing documents
+  useEffect(() => {
+    // Check if any documents are processing
+    const hasProcessing = documents.some(
+      doc => doc.processing_status === 'PROCESSING' || doc.processing_status === 'UPLOADED'
+    )
+
+    if (!hasProcessing) {
+      setIsPolling(false)
+      return
+    }
+
+    setIsPolling(true)
+
+    // Poll every 3 seconds
+    const interval = setInterval(async () => {
+      try {
+        const result = await getDocuments()
+        if (result.error) {
+          console.error('Polling error:', result.error)
+          return
+        }
+
+        const updatedDocs = result.documents || []
+
+        // Check for status changes and show notifications
+        if (previousDocuments.length > 0) {
+          updatedDocs.forEach(doc => {
+            const prevDoc = previousDocuments.find(prev => prev.id === doc.id)
+            if (prevDoc &&
+                doc.processing_status === 'COMPLETED' &&
+                (prevDoc.processing_status === 'PROCESSING' || prevDoc.processing_status === 'UPLOADED')) {
+              toast.success(`${doc.title} processing complete!`)
+            }
+            if (prevDoc &&
+                doc.processing_status === 'FAILED' &&
+                (prevDoc.processing_status === 'PROCESSING' || prevDoc.processing_status === 'UPLOADED')) {
+              toast.error(`${doc.title} processing failed`)
+            }
+          })
+        }
+
+        setDocuments(updatedDocs)
+        setPreviousDocuments(updatedDocs)
+
+        // Stop polling if nothing is processing
+        const stillProcessing = updatedDocs.some(
+          doc => doc.processing_status === 'PROCESSING' || doc.processing_status === 'UPLOADED'
+        )
+
+        if (!stillProcessing) {
+          setIsPolling(false)
+          clearInterval(interval)
+        }
+      } catch (error) {
+        console.error('Polling failed:', error)
+      }
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [documents, previousDocuments])
+
   const fetchDocuments = async () => {
     try {
       const result = await getDocuments()
       if (result.error) {
         setError(result.error)
       } else {
-        setDocuments(result.documents || [])
+        const docs = result.documents || []
+        setDocuments(docs)
+        setPreviousDocuments(docs)
       }
     } catch {
       setError('Failed to fetch documents')
