@@ -28,6 +28,7 @@ type SectionContent = {
   characters?: Character[]
   scenes?: Scene[]
   dialogue?: Dialogue[]
+  text?: string
 }
 
 type Section = {
@@ -42,23 +43,32 @@ export function DocumentSections({ sections }: { sections: Section[] }) {
   console.log('First section content:', sections[0]?.content)
   console.log('Content type:', typeof sections[0]?.content)
 
-  // Helper function to parse content and determine section type
-  const parseSection = (section: Section): { id: string; section_type: string; content: SectionContent; created_at: string } | null => {
-    console.log('Parsing section:', section)
-    let content: SectionContent
-    let sectionType = section.section_type
+  // Safe JSON parsing function
+  function safeParseContent(content: SectionContent | string | null | undefined): SectionContent {
+    if (!content) return {}
 
-    // If content is a string, parse it as JSON
-    if (typeof section.content === 'string') {
+    // If already an object, return it
+    if (typeof content === 'object') return content
+
+    // If string, try to parse
+    if (typeof content === 'string') {
       try {
-        content = JSON.parse(section.content) as SectionContent
-      } catch (e) {
-        console.error('Failed to parse content JSON:', e)
-        return null
+        return JSON.parse(content) as SectionContent
+      } catch (error) {
+        console.error('Failed to parse content JSON:', error)
+        // Return as plain text object if parsing fails
+        return { text: content }
       }
-    } else {
-      content = section.content
     }
+
+    return {}
+  }
+
+  // Helper function to parse content and determine section type
+  const parseSection = (section: Section): { id: string; section_type: string; content: SectionContent; created_at: string } => {
+    console.log('Parsing section:', section)
+    const content = safeParseContent(section.content)
+    let sectionType = section.section_type
 
     console.log('Parsed content:', content)
 
@@ -67,6 +77,7 @@ export function DocumentSections({ sections }: { sections: Section[] }) {
       if (content.characters) sectionType = 'CHARACTERS'
       else if (content.scenes) sectionType = 'SCENES'
       else if (content.dialogue) sectionType = 'DIALOGUE'
+      else if (content.text) sectionType = 'TEXT'
     }
 
     return {
@@ -76,7 +87,7 @@ export function DocumentSections({ sections }: { sections: Section[] }) {
     }
   }
 
-  const parsedSections = sections.map(parseSection).filter((section): section is NonNullable<typeof section> => section !== null)
+  const parsedSections = sections.map(parseSection)
   console.log('Parsed sections:', parsedSections)
 
   return (
@@ -88,7 +99,8 @@ export function DocumentSections({ sections }: { sections: Section[] }) {
           const sectionType = section.section_type ||
             (content.characters ? 'CHARACTERS' :
              content.scenes ? 'SCENES' :
-             content.dialogue ? 'DIALOGUE' : 'UNKNOWN')
+             content.dialogue ? 'DIALOGUE' :
+             content.text ? 'TEXT' : 'UNKNOWN')
 
           return (
             <AccordionItem key={section.id} value={section.id}>
@@ -132,6 +144,13 @@ export function DocumentSections({ sections }: { sections: Section[] }) {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+                  {(sectionType === 'TEXT' || content.text) && (
+                    <div className="border-l-2 pl-4">
+                      <div className="text-sm whitespace-pre-wrap">
+                        {content.text}
+                      </div>
                     </div>
                   )}
                 </div>
