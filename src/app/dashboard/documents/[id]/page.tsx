@@ -8,6 +8,9 @@ import Link from 'next/link'
 import ClientPDFViewer from '@/components/ClientPDFViewer'
 import { ProcessDocumentButton } from '@/components/ProcessDocumentButton'
 import { DocumentSections } from '@/components/DocumentSections'
+import { CharacterBible } from '@/components/CharacterBible'
+import { getCharacterBible } from '@/app/actions/characterBible'
+import { GenerateCharacterBibleButton } from '@/components/GenerateCharacterBibleButton'
 
 export default async function DocumentViewPage({
   params,
@@ -55,6 +58,9 @@ export default async function DocumentViewPage({
     .eq('document_id', id)
     .order('created_at', { ascending: true })
 
+  // Fetch Character Bible if it exists
+  const characterBibleResult = await getCharacterBible(id)
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'UPLOADED':
@@ -85,6 +91,11 @@ export default async function DocumentViewPage({
           {document.processing_status === 'UPLOADED' && (
             <ProcessDocumentButton documentId={id} />
           )}
+          <GenerateCharacterBibleButton
+            documentId={id}
+            hasExisting={characterBibleResult.success}
+            hasExtractedText={!!document.extracted_text}
+          />
           <Button variant="outline" size="sm" asChild>
             <a href={viewUrl} download>
               <Download className="h-4 w-4 mr-2" />
@@ -123,6 +134,16 @@ export default async function DocumentViewPage({
 
       {sections && sections.length > 0 && (
         <DocumentSections sections={sections} />
+      )}
+
+      {characterBibleResult.success && characterBibleResult.data && (
+        <div className="bg-card border rounded-lg p-6">
+          <CharacterBible
+            characters={characterBibleResult.data.characters}
+            scriptTitle={characterBibleResult.data.scriptTitle}
+            generatedAt={characterBibleResult.data.generatedAt}
+          />
+        </div>
       )}
 
       <div className="bg-card border rounded-lg p-4">
