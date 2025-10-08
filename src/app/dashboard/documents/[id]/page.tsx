@@ -14,6 +14,12 @@ import { GenerateCharacterBibleButton } from '@/components/GenerateCharacterBibl
 import { SynopsisDisplay } from '@/components/SynopsisDisplay'
 import { GenerateSynopsisButton } from '@/components/GenerateSynopsisButton'
 import { getSynopsis } from '@/app/actions/synopsis'
+import { LoglinesDisplay } from '@/components/LoglinesDisplay'
+import { OnePagerDisplay } from '@/components/OnePagerDisplay'
+import { GenerateLoglinesButton } from '@/components/GenerateLoglinesButton'
+import { GenerateOnePagerButton } from '@/components/GenerateOnePagerButton'
+import { getLoglines } from '@/app/actions/loglines'
+import { getOnePager } from '@/app/actions/onePager'
 
 export default async function DocumentViewPage({
   params,
@@ -61,11 +67,30 @@ export default async function DocumentViewPage({
     .eq('document_id', id)
     .order('created_at', { ascending: true })
 
+  // Filter out embedding chunks that shouldn't be displayed
+  const displayableSections = sections?.filter(section => {
+    // Only show sections that are actual analysis results, not embeddings
+    const validTypes = ['CHARACTERS', 'SCENES', 'DIALOGUE', 'TEXT'];
+    return section.section_type && validTypes.includes(section.section_type.toUpperCase());
+  }) || [];
+
   // Fetch Character Bible if it exists
   const characterBibleResult = await getCharacterBible(id)
 
   // Fetch Synopsis if it exists
   const synopsisResult = await getSynopsis(id)
+
+  // Fetch Loglines if they exist
+  const loglinesResult = await getLoglines(id)
+
+  // Fetch One-Pager if it exists
+  const onePagerResult = await getOnePager(id)
+
+  // Check prerequisites for One-Pager
+  const hasOnePagerPrerequisites =
+    characterBibleResult.success &&
+    synopsisResult.success &&
+    loglinesResult.success
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -106,6 +131,15 @@ export default async function DocumentViewPage({
             documentId={id}
             hasExisting={synopsisResult.success}
           />
+          <GenerateLoglinesButton
+            documentId={id}
+            hasExisting={loglinesResult.success}
+          />
+          <GenerateOnePagerButton
+            documentId={id}
+            hasExisting={onePagerResult.success}
+            hasPrerequisites={hasOnePagerPrerequisites}
+          />
           <Button variant="outline" size="sm" asChild>
             <a href={viewUrl} download>
               <Download className="h-4 w-4 mr-2" />
@@ -142,8 +176,8 @@ export default async function DocumentViewPage({
         </div>
       </div>
 
-      {sections && sections.length > 0 && (
-        <DocumentSections sections={sections} />
+      {displayableSections && displayableSections.length > 0 && (
+        <DocumentSections sections={displayableSections} />
       )}
 
       {characterBibleResult.success && characterBibleResult.data && (
@@ -165,6 +199,22 @@ export default async function DocumentViewPage({
             scriptTitle={synopsisResult.data.scriptTitle}
             generatedAt={synopsisResult.data.generatedAt}
           />
+        </div>
+      )}
+
+      {loglinesResult.success && loglinesResult.data && (
+        <div className="bg-card border rounded-lg p-6">
+          <LoglinesDisplay
+            loglines={loglinesResult.data.loglines}
+            scriptTitle={loglinesResult.data.scriptTitle}
+            generatedAt={loglinesResult.data.generatedAt}
+          />
+        </div>
+      )}
+
+      {onePagerResult.success && onePagerResult.data && (
+        <div className="bg-card border rounded-lg p-6">
+          <OnePagerDisplay data={onePagerResult.data} />
         </div>
       )}
 
