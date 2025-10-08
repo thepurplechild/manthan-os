@@ -11,6 +11,9 @@ import { DocumentSections } from '@/components/DocumentSections'
 import { CharacterBible } from '@/components/CharacterBible'
 import { getCharacterBible } from '@/app/actions/characterBible'
 import { GenerateCharacterBibleButton } from '@/components/GenerateCharacterBibleButton'
+import { SynopsisDisplay } from '@/components/SynopsisDisplay'
+import { GenerateSynopsisButton } from '@/components/GenerateSynopsisButton'
+import { getSynopsis } from '@/app/actions/synopsis'
 
 export default async function DocumentViewPage({
   params,
@@ -61,6 +64,9 @@ export default async function DocumentViewPage({
   // Fetch Character Bible if it exists
   const characterBibleResult = await getCharacterBible(id)
 
+  // Fetch Synopsis if it exists
+  const synopsisResult = await getSynopsis(id)
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'UPLOADED':
@@ -95,6 +101,10 @@ export default async function DocumentViewPage({
             documentId={id}
             hasExisting={characterBibleResult.success}
             hasExtractedText={!!document.extracted_text}
+          />
+          <GenerateSynopsisButton
+            documentId={id}
+            hasExisting={synopsisResult.success}
           />
           <Button variant="outline" size="sm" asChild>
             <a href={viewUrl} download>
@@ -142,6 +152,18 @@ export default async function DocumentViewPage({
             characters={characterBibleResult.data.characters}
             scriptTitle={characterBibleResult.data.scriptTitle}
             generatedAt={characterBibleResult.data.generatedAt}
+          />
+        </div>
+      )}
+
+      {synopsisResult.success && synopsisResult.data && (
+        <div className="bg-card border rounded-lg p-6">
+          <SynopsisDisplay
+            tweet={synopsisResult.data.tweet}
+            short={synopsisResult.data.short}
+            long={synopsisResult.data.long}
+            scriptTitle={synopsisResult.data.scriptTitle}
+            generatedAt={synopsisResult.data.generatedAt}
           />
         </div>
       )}
