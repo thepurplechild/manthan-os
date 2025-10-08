@@ -38,6 +38,9 @@ export async function POST(request: NextRequest) {
     const voyageData = await voyageResponse.json()
     const queryEmbedding = voyageData.data[0].embedding
 
+    // Debug: Check user ID
+    console.log('User ID:', user.id)
+
     // Perform vector similarity search
     const { data: results, error } = await supabase.rpc('search_documents', {
       query_embedding: queryEmbedding,
