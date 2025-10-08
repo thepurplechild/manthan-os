@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { FileText, Clock, CheckCircle } from 'lucide-react'
-import SemanticSearch from '@/components/SemanticSearch'
+import { SemanticSearch } from '@/components/SemanticSearch'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -72,8 +72,8 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Semantic Search Component */}
-      {(totalDocs || 0) > 0 && <SemanticSearch />}
+      {/* Global Semantic Search would need to be implemented separately
+          For now, semantic search is available in individual document views */}
 
       <div className="grid gap-4 md:grid-cols-3">
         {stats.map((stat) => {

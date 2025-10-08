@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getDocumentViewUrl } from '@/app/actions/documents'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ArrowLeft, Download } from 'lucide-react'
 import Link from 'next/link'
 import ClientPDFViewer from '@/components/ClientPDFViewer'
@@ -20,6 +21,9 @@ import { GenerateLoglinesButton } from '@/components/GenerateLoglinesButton'
 import { GenerateOnePagerButton } from '@/components/GenerateOnePagerButton'
 import { getLoglines } from '@/app/actions/loglines'
 import { getOnePager } from '@/app/actions/onePager'
+import { ProjectLayout } from '@/components/ProjectLayout'
+import { ProjectOverview } from '@/components/ProjectOverview'
+import { SemanticSearch } from '@/components/SemanticSearch'
 
 export default async function DocumentViewPage({
   params,
@@ -92,135 +96,191 @@ export default async function DocumentViewPage({
     synopsisResult.success &&
     loglinesResult.success
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'UPLOADED':
-        return 'default'
-      case 'PROCESSING':
-        return 'secondary'
-      case 'COMPLETED':
-        return 'default'
-      case 'FAILED':
-        return 'destructive'
-      default:
-        return 'default'
-    }
-  }
+  // Get signed URL for download
+  const { data: signedUrlData } = await supabase.storage
+    .from('creator-assets')
+    .createSignedUrl(document.storage_path, 3600)
+
+  const signedUrl = signedUrlData?.signedUrl || viewUrl
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/dashboard/documents">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Documents
-            </Link>
-          </Button>
-        </div>
-        <div className="flex items-center gap-2">
-          {document.processing_status === 'UPLOADED' && (
-            <ProcessDocumentButton documentId={id} />
-          )}
-          <GenerateCharacterBibleButton
-            documentId={id}
-            hasExisting={characterBibleResult.success}
-            hasExtractedText={!!document.extracted_text}
-          />
-          <GenerateSynopsisButton
-            documentId={id}
-            hasExisting={synopsisResult.success}
-          />
-          <GenerateLoglinesButton
-            documentId={id}
-            hasExisting={loglinesResult.success}
-          />
-          <GenerateOnePagerButton
-            documentId={id}
-            hasExisting={onePagerResult.success}
-            hasPrerequisites={hasOnePagerPrerequisites}
-          />
-          <Button variant="outline" size="sm" asChild>
-            <a href={viewUrl} download>
-              <Download className="h-4 w-4 mr-2" />
-              Download
-            </a>
-          </Button>
-        </div>
+      {/* Navigation */}
+      <div className="flex items-center">
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/dashboard/documents">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Documents
+          </Link>
+        </Button>
       </div>
 
-      <div className="bg-card border rounded-lg p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold">{document.title}</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Uploaded {new Date(document.created_at).toLocaleDateString()}
-            </p>
+      <ProjectLayout
+        documentTitle={document.title}
+        showCharacterBible={characterBibleResult.success}
+        showSynopsis={synopsisResult.success}
+        showLoglines={loglinesResult.success}
+        showOnePager={onePagerResult.success}
+        scriptView={
+          <div className="space-y-6">
+            {/* Project Overview Card */}
+            <ProjectOverview
+              title={document.title}
+              uploadedAt={document.created_at}
+              fileSize={document.file_size_bytes || 0}
+              status={document.processing_status}
+              hasCharacterBible={characterBibleResult.success}
+              hasSynopsis={synopsisResult.success}
+              hasLoglines={loglinesResult.success}
+              hasOnePager={onePagerResult.success}
+              downloadUrl={signedUrl}
+            />
+
+            {/* Generate Buttons Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Generate AI Analysis</CardTitle>
+                <CardDescription>
+                  Create professional pitch materials using AI
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {document.processing_status === 'UPLOADED' && (
+                  <ProcessDocumentButton documentId={id} />
+                )}
+                <GenerateCharacterBibleButton
+                  documentId={id}
+                  hasExisting={characterBibleResult.success}
+                  hasExtractedText={!!document.extracted_text}
+                />
+                <GenerateSynopsisButton
+                  documentId={id}
+                  hasExisting={synopsisResult.success}
+                />
+                <GenerateLoglinesButton
+                  documentId={id}
+                  hasExisting={loglinesResult.success}
+                />
+                <GenerateOnePagerButton
+                  documentId={id}
+                  hasExisting={onePagerResult.success}
+                  hasPrerequisites={hasOnePagerPrerequisites}
+                />
+              </CardContent>
+            </Card>
+
+            {/* PDF Viewer */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Script Document</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ClientPDFViewer url={viewUrl} />
+              </CardContent>
+            </Card>
+
+            {/* Legacy Analysis Results (if any) */}
+            {displayableSections.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Legacy Analysis</CardTitle>
+                  <CardDescription>
+                    Previous analysis format (kept for reference)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <DocumentSections sections={displayableSections} />
+                </CardContent>
+              </Card>
+            )}
           </div>
-          <Badge variant={getStatusColor(document.processing_status)}>
-            {document.processing_status}
-          </Badge>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="text-muted-foreground">File Size:</span>{' '}
-            {document.file_size_bytes
-              ? `${(document.file_size_bytes / 1024).toFixed(2)} KB`
-              : 'Unknown'}
+        }
+        characterBible={
+          characterBibleResult.success && characterBibleResult.data ? (
+            <CharacterBible
+              characters={characterBibleResult.data.characters}
+              scriptTitle={characterBibleResult.data.scriptTitle}
+              generatedAt={characterBibleResult.data.generatedAt}
+            />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Character Bible Not Generated</CardTitle>
+                <CardDescription>
+                  Go to the Script tab and click "Generate Character Bible" to create this analysis.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          )
+        }
+        synopsis={
+          synopsisResult.success && synopsisResult.data ? (
+            <SynopsisDisplay
+              tweet={synopsisResult.data.tweet}
+              short={synopsisResult.data.short}
+              long={synopsisResult.data.long}
+              scriptTitle={synopsisResult.data.scriptTitle}
+              generatedAt={synopsisResult.data.generatedAt}
+            />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Synopsis Not Generated</CardTitle>
+                <CardDescription>
+                  Go to the Script tab and click "Generate Synopsis" to create this analysis.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          )
+        }
+        loglines={
+          loglinesResult.success && loglinesResult.data ? (
+            <LoglinesDisplay
+              loglines={loglinesResult.data.loglines}
+              scriptTitle={loglinesResult.data.scriptTitle}
+              generatedAt={loglinesResult.data.generatedAt}
+            />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Loglines Not Generated</CardTitle>
+                <CardDescription>
+                  Go to the Script tab and click "Generate Loglines" to create this analysis.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          )
+        }
+        onePager={
+          onePagerResult.success && onePagerResult.data ? (
+            <OnePagerDisplay data={onePagerResult.data} />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>One-Pager Not Generated</CardTitle>
+                <CardDescription>
+                  Generate Character Bible, Synopsis, and Loglines first, then click "Generate One-Pager" in the Script tab.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          )
+        }
+        searchView={
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Semantic Search</CardTitle>
+                <CardDescription>
+                  Search within your script using natural language queries
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <SemanticSearch documentId={id} />
+              </CardContent>
+            </Card>
           </div>
-          <div>
-            <span className="text-muted-foreground">Status:</span>{' '}
-            {document.processing_status}
-          </div>
-        </div>
-      </div>
-
-      {displayableSections && displayableSections.length > 0 && (
-        <DocumentSections sections={displayableSections} />
-      )}
-
-      {characterBibleResult.success && characterBibleResult.data && (
-        <div className="bg-card border rounded-lg p-6">
-          <CharacterBible
-            characters={characterBibleResult.data.characters}
-            scriptTitle={characterBibleResult.data.scriptTitle}
-            generatedAt={characterBibleResult.data.generatedAt}
-          />
-        </div>
-      )}
-
-      {synopsisResult.success && synopsisResult.data && (
-        <div className="bg-card border rounded-lg p-6">
-          <SynopsisDisplay
-            tweet={synopsisResult.data.tweet}
-            short={synopsisResult.data.short}
-            long={synopsisResult.data.long}
-            scriptTitle={synopsisResult.data.scriptTitle}
-            generatedAt={synopsisResult.data.generatedAt}
-          />
-        </div>
-      )}
-
-      {loglinesResult.success && loglinesResult.data && (
-        <div className="bg-card border rounded-lg p-6">
-          <LoglinesDisplay
-            loglines={loglinesResult.data.loglines}
-            scriptTitle={loglinesResult.data.scriptTitle}
-            generatedAt={loglinesResult.data.generatedAt}
-          />
-        </div>
-      )}
-
-      {onePagerResult.success && onePagerResult.data && (
-        <div className="bg-card border rounded-lg p-6">
-          <OnePagerDisplay data={onePagerResult.data} />
-        </div>
-      )}
-
-      <div className="bg-card border rounded-lg p-4">
-        <ClientPDFViewer url={viewUrl} />
-      </div>
+        }
+      />
     </div>
   )
 }

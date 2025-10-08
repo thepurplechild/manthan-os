@@ -18,7 +18,11 @@ interface SearchResult {
   metadata: Record<string, unknown>
 }
 
-export default function SemanticSearch() {
+interface SemanticSearchProps {
+  documentId: string;
+}
+
+export function SemanticSearch({ documentId }: SemanticSearchProps) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
@@ -36,7 +40,7 @@ export default function SemanticSearch() {
       const response = await fetch('/api/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, limit: 10, threshold: 0.4 })
+        body: JSON.stringify({ query, limit: 10, threshold: 0.4, documentId })
       })
 
       const data = await response.json()
@@ -60,7 +64,7 @@ export default function SemanticSearch() {
         <CardHeader>
           <CardTitle>Semantic Search</CardTitle>
           <CardDescription>
-            Search across all your scripts using natural language
+            Search within this script using natural language
           </CardDescription>
         </CardHeader>
         <CardContent>
