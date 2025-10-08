@@ -16,14 +16,16 @@ export async function createClient() {
         set(name: string, value: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value, ...options })
-          } catch (error) {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          } catch (_error) {
             // Handle error when called from Server Component
           }
         },
         remove(name: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value: '', ...options })
-          } catch (error) {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          } catch (_error) {
             // Handle error when called from Server Component
           }
         },

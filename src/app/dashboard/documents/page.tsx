@@ -92,7 +92,6 @@ export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [isMobile, setIsMobile] = useState(false)
-  const [isPolling, setIsPolling] = useState(false)
   const [previousDocuments, setPreviousDocuments] = useState<Document[]>([])
 
   useEffect(() => {
@@ -118,11 +117,9 @@ export default function DocumentsPage() {
     )
 
     if (!hasProcessing) {
-      setIsPolling(false)
       return
     }
 
-    setIsPolling(true)
 
     // Poll every 3 seconds
     const interval = setInterval(async () => {
@@ -161,8 +158,7 @@ export default function DocumentsPage() {
         )
 
         if (!stillProcessing) {
-          setIsPolling(false)
-          clearInterval(interval)
+              clearInterval(interval)
         }
       } catch (error) {
         console.error('Polling failed:', error)

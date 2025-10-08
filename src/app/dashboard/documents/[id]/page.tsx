@@ -2,9 +2,8 @@ import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getDocumentViewUrl } from '@/app/actions/documents'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowLeft, Download } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import ClientPDFViewer from '@/components/ClientPDFViewer'
 import { ProcessDocumentButton } from '@/components/ProcessDocumentButton'
@@ -125,7 +124,6 @@ export default async function DocumentViewPage({
           <div className="space-y-6">
             {/* Project Overview Card */}
             <ProjectOverview
-              title={document.title}
               uploadedAt={document.created_at}
               fileSize={document.file_size_bytes || 0}
               status={document.processing_status}
@@ -207,7 +205,7 @@ export default async function DocumentViewPage({
               <CardHeader>
                 <CardTitle>Character Bible Not Generated</CardTitle>
                 <CardDescription>
-                  Go to the Script tab and click "Generate Character Bible" to create this analysis.
+                  Go to the Script tab and click &quot;Generate Character Bible&quot; to create this analysis.
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -227,7 +225,7 @@ export default async function DocumentViewPage({
               <CardHeader>
                 <CardTitle>Synopsis Not Generated</CardTitle>
                 <CardDescription>
-                  Go to the Script tab and click "Generate Synopsis" to create this analysis.
+                  Go to the Script tab and click &quot;Generate Synopsis&quot; to create this analysis.
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -245,7 +243,7 @@ export default async function DocumentViewPage({
               <CardHeader>
                 <CardTitle>Loglines Not Generated</CardTitle>
                 <CardDescription>
-                  Go to the Script tab and click "Generate Loglines" to create this analysis.
+                  Go to the Script tab and click &quot;Generate Loglines&quot; to create this analysis.
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -259,7 +257,7 @@ export default async function DocumentViewPage({
               <CardHeader>
                 <CardTitle>One-Pager Not Generated</CardTitle>
                 <CardDescription>
-                  Generate Character Bible, Synopsis, and Loglines first, then click "Generate One-Pager" in the Script tab.
+                  Generate Character Bible, Synopsis, and Loglines first, then click &quot;Generate One-Pager&quot; in the Script tab.
                 </CardDescription>
               </CardHeader>
             </Card>

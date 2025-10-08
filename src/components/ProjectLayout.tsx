@@ -12,7 +12,6 @@ import {
   Search,
   Film
 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
 
 interface ProjectLayoutProps {
   scriptView: React.ReactNode;

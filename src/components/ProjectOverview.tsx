@@ -14,7 +14,6 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 
 interface ProjectOverviewProps {
-  title: string;
   uploadedAt: string;
   fileSize: number;
   status: string;
@@ -27,7 +26,6 @@ interface ProjectOverviewProps {
 }
 
 export function ProjectOverview({
-  title,
   uploadedAt,
   fileSize,
   status,
