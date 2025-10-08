@@ -36,7 +36,7 @@ export default function SemanticSearch() {
       const response = await fetch('/api/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, limit: 10, threshold: 0.6 })
+        body: JSON.stringify({ query, limit: 10, threshold: 0.4 })
       })
 
       const data = await response.json()
