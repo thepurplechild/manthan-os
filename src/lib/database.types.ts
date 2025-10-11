@@ -2,15 +2,45 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type ProcessingStatus = 'UPLOADED' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
 
-export type AnalysisOutputType = 
-  | 'CHARACTER_BIBLE' 
-  | 'SYNOPSIS' 
-  | 'LOGLINES' 
-  | 'ONE_PAGER' 
-  | 'GENRE_CLASSIFICATION' 
+export type AssetType =
+  | 'SCRIPT'
+  | 'OUTLINE'
+  | 'CHARACTER_SHEET'
+  | 'DIALOGUE_SAMPLE'
+  | 'VOICE_SAMPLE'
+  | 'AUDIO_PILOT'
+  | 'IMAGE_REFERENCE'
+  | 'IMAGE_CONCEPT'
+  | 'VIDEO_REFERENCE'
+  | 'MOOD_BOARD'
+  | 'TREATMENT'
+  | 'PITCH_DECK'
+
+export type AnalysisOutputType =
+  | 'CHARACTER_BIBLE'
+  | 'SYNOPSIS'
+  | 'LOGLINES'
+  | 'ONE_PAGER'
+  | 'GENRE_CLASSIFICATION'
   | 'PACKAGING_BRIEF'
 
 export type AnalysisStatus = 'GENERATING' | 'GENERATED' | 'FAILED'
+
+export interface AssetMetadata {
+  duration?: number;
+  dimensions?: {
+    width: number;
+    height: number;
+  };
+  characterName?: string;
+  location?: string;
+  sceneNumber?: string;
+  pageCount?: number;
+  slideCount?: number;
+  thumbnailUrl?: string;
+  transcription?: string;
+  tags?: string[];
+}
 
 export interface Database {
   public: {
@@ -20,33 +50,48 @@ export interface Database {
           id: string
           owner_id: string
           title: string
+          asset_type: AssetType
           storage_url: string
           storage_path: string
           file_size_bytes: number
           processing_status: ProcessingStatus
           extracted_text: string | null
+          asset_metadata: AssetMetadata
+          parent_document_id: string | null
+          mime_type: string | null
+          is_primary: boolean
           created_at: string
         }
         Insert: {
           id?: string
           owner_id: string
           title: string
+          asset_type?: AssetType
           storage_url: string
           storage_path: string
           file_size_bytes: number
           processing_status?: ProcessingStatus
           extracted_text?: string | null
+          asset_metadata?: AssetMetadata
+          parent_document_id?: string | null
+          mime_type?: string | null
+          is_primary?: boolean
           created_at?: string
         }
         Update: {
           id?: string
           owner_id?: string
           title?: string
+          asset_type?: AssetType
           storage_url?: string
           storage_path?: string
           file_size_bytes?: number
           processing_status?: ProcessingStatus
           extracted_text?: string | null
+          asset_metadata?: AssetMetadata
+          parent_document_id?: string | null
+          mime_type?: string | null
+          is_primary?: boolean
           created_at?: string
         }
       }

@@ -23,6 +23,8 @@ import { getOnePager } from '@/app/actions/onePager'
 import { ProjectLayout } from '@/components/ProjectLayout'
 import { ProjectOverview } from '@/components/ProjectOverview'
 import { SemanticSearch } from '@/components/SemanticSearch'
+import { UploadImageAsset } from '@/components/UploadImageAsset'
+import { AssetGallery } from '@/components/AssetGallery'
 
 export default async function DocumentViewPage({
   params,
@@ -95,6 +97,14 @@ export default async function DocumentViewPage({
     synopsisResult.success &&
     loglinesResult.success
 
+  // Fetch related assets (images, etc.)
+  const { data: relatedAssets } = await supabase
+    .from('documents')
+    .select('id, title, asset_type, storage_url, mime_type, file_size_bytes, created_at')
+    .eq('parent_document_id', id)
+    .eq('asset_type', 'IMAGE_REFERENCE')
+    .order('created_at', { ascending: false })
+
   // Get signed URL for download
   const { data: signedUrlData } = await supabase.storage
     .from('creator-assets')
@@ -166,6 +176,24 @@ export default async function DocumentViewPage({
                 />
               </CardContent>
             </Card>
+
+            {/* Upload Reference Images Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Reference Materials</CardTitle>
+                <CardDescription>
+                  Upload reference images for character designs, locations, or visual inspiration
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <UploadImageAsset documentId={id} />
+              </CardContent>
+            </Card>
+
+            {/* Display Uploaded Images */}
+            {relatedAssets && relatedAssets.length > 0 && (
+              <AssetGallery assets={relatedAssets} />
+            )}
 
             {/* PDF Viewer */}
             <Card>
