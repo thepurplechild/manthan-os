@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -213,9 +212,9 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
               <Label htmlFor="style">Style</Label>
               <Select 
                 value={style} 
-                onValueChange={(v: any) => {
+                onValueChange={(v) => {
                   console.log('🎨 Style changed to:', v);
-                  setStyle(v);
+                  setStyle(v as typeof style);
                 }} 
                 disabled={isGenerating}
               >
@@ -237,9 +236,9 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
               <Label htmlFor="aspect-ratio">Aspect Ratio</Label>
               <Select 
                 value={aspectRatio} 
-                onValueChange={(v: any) => {
+                onValueChange={(v) => {
                   console.log('📐 Aspect ratio changed to:', v);
-                  setAspectRatio(v);
+                  setAspectRatio(v as typeof aspectRatio);
                 }} 
                 disabled={isGenerating}
               >
