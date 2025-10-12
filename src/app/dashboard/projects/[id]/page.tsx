@@ -11,6 +11,7 @@ import { DeleteAssetButton } from '@/components/assets/DeleteAssetButton';
 import { DeleteProjectButton } from '@/components/projects/DeleteProjectButton';
 import { EditAssetDialog } from '@/components/assets/EditAssetDialog';
 import { ConceptGenerator } from '@/components/ai/ConceptGenerator';
+import { AssetGallery } from '@/components/AssetGallery';
 
 interface ProjectPageProps {
   params: Promise<{ id: string }>;
@@ -111,7 +112,15 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
         <TabsContent value="assets">
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Assets ({documents?.length || 0})</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Assets ({documents?.length || 0})</h2>
+              <Button asChild variant="outline">
+                <Link href={`/dashboard/projects/${id}/upload`}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload Assets
+                </Link>
+              </Button>
+            </div>
 
             {!documents || documents.length === 0 ? (
               <div className="text-center py-12 border-2 border-dashed rounded-lg">
@@ -124,45 +133,18 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                 </Button>
               </div>
             ) : (
-              <div className="grid gap-4">
-                {documents.map((doc) => (
-                  <div key={doc.id} className="border rounded-lg p-4 hover:bg-accent transition-colors">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="font-medium">{doc.title}</h3>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="secondary" className={ASSET_TYPE_COLORS[doc.asset_type]}>
-                            {ASSET_TYPE_LABELS[doc.asset_type] || doc.asset_type}
-                          </Badge>
-                          <span className="text-sm text-muted-foreground">
-                            {formatFileSize(doc.file_size_bytes)}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2">
-                        {doc.asset_type === 'SCRIPT' && (
-                          <Button asChild size="sm" variant="outline">
-                            <Link href={`/dashboard/documents/${doc.id}`}>
-                              View Analysis
-                            </Link>
-                          </Button>
-                        )}
-                        <EditAssetDialog
-                          assetId={doc.id}
-                          currentTitle={doc.title}
-                          currentType={doc.asset_type}
-                          currentMetadata={doc.asset_metadata}
-                        />
-                        <DeleteAssetButton
-                          assetId={doc.id}
-                          assetTitle={doc.title}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <AssetGallery
+                assets={documents.map(doc => ({
+                  id: doc.id,
+                  title: doc.title,
+                  asset_type: doc.asset_type,
+                  storage_url: doc.storage_url,
+                  mime_type: doc.mime_type || '',
+                  file_size_bytes: doc.file_size_bytes,
+                  asset_metadata: doc.asset_metadata || {},
+                  created_at: doc.created_at
+                }))}
+              />
             )}
           </div>
         </TabsContent>

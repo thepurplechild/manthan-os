@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,7 +25,8 @@ interface ConceptGeneratorProps {
 
 export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
   console.log('🟦 ConceptGenerator mounted with projectId:', projectId);
-  
+
+  const router = useRouter();
   const [characterPrompt, setCharacterPrompt] = useState('');
   const [locationPrompt, setLocationPrompt] = useState('');
   const [style, setStyle] = useState<'realistic' | 'cinematic' | 'cyberpunk' | 'anime' | 'oil_painting' | 'watercolor'>('realistic');
@@ -84,6 +86,12 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
         console.log('✅ Image URL:', result.imageUrl);
         setGeneratedImage(result.imageUrl);
         toast.success('Concept generated and saved to project!');
+
+        // Refresh the page to show the new asset in the gallery
+        setTimeout(() => {
+          console.log('🔄 Refreshing page to show new asset...');
+          router.refresh();
+        }, 2000); // Small delay to let user see the success message
       } else {
         console.error('❌ Generation failed:', result.error);
         toast.error(result.error || 'Failed to generate concept');
