@@ -1,9 +1,15 @@
-import { MIME_TYPE_TO_ASSET_TYPE, MAX_FILE_SIZES, ASSET_TYPE_CATEGORIES, AssetType } from '../types/assets';
+import {
+  MIME_TYPE_TO_ASSET_TYPE,
+  MAX_FILE_SIZES,
+  detectAssetTypeFromFile,
+  getFileExtension,
+  type AssetType
+} from '@/lib/types/assets';
 
 export interface FileValidationResult {
   valid: boolean;
   error?: string;
-  suggestedType?: AssetType;
+  suggestedTypes?: AssetType[];
   category?: string;
 }
 
@@ -11,26 +17,32 @@ export function validateFile(
   file: File,
   expectedType?: AssetType
 ): FileValidationResult {
-  // Check if file type is supported
-  const mimeType = file.type;
-  const possibleTypes = MIME_TYPE_TO_ASSET_TYPE[mimeType];
+  // Detect possible types for this file
+  const detectedTypes = detectAssetTypeFromFile(file);
 
-  if (!possibleTypes) {
-    return {
-      valid: false,
-      error: `Unsupported file type: ${mimeType}`,
-    };
+  if (detectedTypes.length === 0) {
+    // Check MIME type as fallback
+    const mimeTypes = MIME_TYPE_TO_ASSET_TYPE[file.type];
+    if (!mimeTypes || mimeTypes.length === 0) {
+      return {
+        valid: false,
+        error: `Unsupported file type: ${file.type || 'unknown'}`,
+      };
+    }
   }
 
   // Determine category
   let category: string = 'document';
-  if (mimeType.startsWith('image/')) category = 'image';
-  else if (mimeType.startsWith('audio/')) category = 'audio';
-  else if (mimeType.startsWith('video/')) category = 'video';
-  else if (mimeType.startsWith('text/')) category = 'text';
+  const ext = getFileExtension(file.name);
 
-  // Check file size
-  const maxSize = MAX_FILE_SIZES[category];
+  if (file.type.startsWith('image/')) category = 'image';
+  else if (file.type.startsWith('audio/')) category = 'audio';
+  else if (file.type.startsWith('video/')) category = 'video';
+  else if (file.type.startsWith('text/')) category = 'text';
+  else if (ext === 'fdx') category = 'text';
+
+  // Check file size against category limit
+  const maxSize = MAX_FILE_SIZES[category] || MAX_FILE_SIZES.document;
   if (file.size > maxSize) {
     return {
       valid: false,
@@ -38,24 +50,24 @@ export function validateFile(
     };
   }
 
-  // If expected type provided, validate it
-  if (expectedType && !possibleTypes.includes(expectedType)) {
-    return {
-      valid: false,
-      error: `File type ${mimeType} is not valid for ${expectedType}`,
-    };
+  // If expected type provided, validate it matches
+  if (expectedType) {
+    const allPossibleTypes = [...detectedTypes, ...(MIME_TYPE_TO_ASSET_TYPE[file.type] || [])];
+    if (!allPossibleTypes.includes(expectedType)) {
+      return {
+        valid: false,
+        error: `File type ${file.type} is not valid for ${expectedType}`,
+      };
+    }
   }
 
   return {
     valid: true,
-    suggestedType: possibleTypes[0], // Suggest first matching type
+    suggestedTypes: detectedTypes,
     category,
   };
 }
 
-export function getFileExtension(filename: string): string {
-  return filename.slice(((filename.lastIndexOf('.') - 1) >>> 0) + 2);
-}
 
 export function sanitizeFilename(filename: string): string {
   // Remove special characters, keep alphanumeric, dash, underscore, dot

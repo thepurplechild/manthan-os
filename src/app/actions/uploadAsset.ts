@@ -12,6 +12,7 @@ export async function createAssetRecord({
   mimeType,
   fileSize,
   parentDocumentId,
+  metadata = {},
 }: {
   title: string;
   assetType: AssetType;
@@ -20,6 +21,7 @@ export async function createAssetRecord({
   mimeType: string;
   fileSize: number;
   parentDocumentId: string;
+  metadata?: Record<string, unknown>;
 }) {
   const supabase = await createClient();
 
@@ -48,17 +50,17 @@ export async function createAssetRecord({
   const { data: newAsset, error: insertError } = await supabase
     .from('documents')
     .insert({
-      owner_id: user.id, // Copy owner from parent for simple RLS
+      owner_id: user.id,
       title,
       asset_type: assetType,
       storage_url: storageUrl,
       storage_path: storagePath,
       mime_type: mimeType,
       file_size_bytes: fileSize,
-      processing_status: 'COMPLETED', // Images don't need processing
+      processing_status: 'COMPLETED',
       parent_document_id: parentDocumentId,
       is_primary: false,
-      asset_metadata: {},
+      asset_metadata: metadata,
     })
     .select()
     .single();

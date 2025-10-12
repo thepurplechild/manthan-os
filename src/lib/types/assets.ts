@@ -32,29 +32,39 @@ export const ASSET_TYPE_CATEGORIES = {
   document: ['MOOD_BOARD', 'PITCH_DECK'],
 } as const;
 
+// Final Draft MIME type (critical!)
+export const FINAL_DRAFT_MIME = 'application/x-finaldraft';
+
+// Comprehensive MIME type to asset type mapping
 export const MIME_TYPE_TO_ASSET_TYPE: Record<string, AssetType[]> = {
-  // Text formats
-  'application/pdf': ['SCRIPT', 'TREATMENT', 'MOOD_BOARD', 'PITCH_DECK'],
-  'text/plain': ['SCRIPT', 'OUTLINE', 'CHARACTER_SHEET', 'DIALOGUE_SAMPLE'],
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['SCRIPT', 'TREATMENT'],
+  // Final Draft (highest priority)
+  'application/x-finaldraft': ['SCRIPT'],
 
-  // Audio formats
-  'audio/mpeg': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
-  'audio/wav': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
-  'audio/mp4': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
+  // Documents - scripts, outlines, character sheets
+  'application/pdf': ['SCRIPT', 'OUTLINE', 'CHARACTER_SHEET', 'DIALOGUE_SAMPLE', 'MOOD_BOARD', 'TREATMENT'],
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['SCRIPT', 'OUTLINE', 'CHARACTER_SHEET', 'DIALOGUE_SAMPLE', 'TREATMENT'],
+  'application/msword': ['SCRIPT', 'OUTLINE', 'CHARACTER_SHEET', 'DIALOGUE_SAMPLE'],
+  'text/plain': ['OUTLINE', 'CHARACTER_SHEET', 'DIALOGUE_SAMPLE'],
 
-  // Image formats
+  // Images
   'image/jpeg': ['IMAGE_REFERENCE', 'IMAGE_CONCEPT'],
   'image/png': ['IMAGE_REFERENCE', 'IMAGE_CONCEPT'],
   'image/webp': ['IMAGE_REFERENCE', 'IMAGE_CONCEPT'],
 
-  // Video formats
+  // Audio
+  'audio/mpeg': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
+  'audio/wav': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
+  'audio/mp4': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
+  'audio/x-m4a': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
+
+  // Video
   'video/mp4': ['VIDEO_REFERENCE'],
   'video/quicktime': ['VIDEO_REFERENCE'],
+  'video/webm': ['VIDEO_REFERENCE'],
 
-  // Presentation formats
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['MOOD_BOARD', 'PITCH_DECK'],
-  'application/vnd.ms-powerpoint': ['MOOD_BOARD', 'PITCH_DECK'],
+  // Presentations
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['MOOD_BOARD'],
+  'application/vnd.ms-powerpoint': ['MOOD_BOARD'],
 };
 
 export const MAX_FILE_SIZES: Record<string, number> = {
@@ -124,4 +134,45 @@ export function getPossibleAssetTypesForMimeType(mimeType: string): AssetType[] 
 export function isValidMimeTypeForAssetType(mimeType: string, assetType: AssetType): boolean {
   const possibleTypes = getPossibleAssetTypesForMimeType(mimeType);
   return possibleTypes.includes(assetType);
+}
+
+// Smart detection based on filename patterns
+export function detectAssetTypeFromFile(file: File): AssetType[] {
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  const name = file.name.toLowerCase();
+
+  // Extension-based detection (highest priority)
+  if (ext === 'fdx') return ['SCRIPT'];
+
+  // Filename pattern detection
+  if (name.includes('outline') || name.includes('beat')) return ['OUTLINE'];
+  if (name.includes('character') && !name.includes('concept')) return ['CHARACTER_SHEET'];
+  if (name.includes('scene') || name.includes('dialogue')) return ['DIALOGUE_SAMPLE'];
+  if (name.includes('mood') || name.includes('board')) return ['MOOD_BOARD'];
+  if (name.includes('concept') || name.includes('art')) return ['IMAGE_CONCEPT'];
+  if (name.includes('voice') || name.includes('sample')) return ['VOICE_SAMPLE'];
+  if (name.includes('reference')) {
+    if (ext && ['mp4', 'mov', 'webm'].includes(ext)) return ['VIDEO_REFERENCE'];
+    if (ext && ['jpg', 'jpeg', 'png', 'webp'].includes(ext)) return ['IMAGE_REFERENCE'];
+  }
+
+  // Fall back to MIME type detection
+  const mimeTypes = MIME_TYPE_TO_ASSET_TYPE[file.type];
+  if (mimeTypes && mimeTypes.length > 0) return mimeTypes;
+
+  return [];
+}
+
+// Get file extension helper
+export function getFileExtension(filename: string): string {
+  return filename.slice(((filename.lastIndexOf('.') - 1) >>> 0) + 2).toLowerCase();
+}
+
+// Format file size for display
+export function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }

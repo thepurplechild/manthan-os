@@ -23,7 +23,7 @@ import { getOnePager } from '@/app/actions/onePager'
 import { ProjectLayout } from '@/components/ProjectLayout'
 import { ProjectOverview } from '@/components/ProjectOverview'
 import { SemanticSearch } from '@/components/SemanticSearch'
-import { UploadImageAsset } from '@/components/UploadImageAsset'
+import { UploadAsset } from '@/components/UploadAsset'
 import { AssetGallery } from '@/components/AssetGallery'
 
 export default async function DocumentViewPage({
@@ -97,12 +97,13 @@ export default async function DocumentViewPage({
     synopsisResult.success &&
     loglinesResult.success
 
-  // Fetch related assets (images, etc.)
+  // Fetch ALL related assets (not just images)
   const { data: relatedAssets } = await supabase
     .from('documents')
-    .select('id, title, asset_type, storage_url, mime_type, file_size_bytes, created_at')
+    .select('id, title, asset_type, storage_url, mime_type, file_size_bytes, asset_metadata, created_at')
     .eq('parent_document_id', id)
-    .eq('asset_type', 'IMAGE_REFERENCE')
+    .eq('is_primary', false)
+    .order('asset_type')
     .order('created_at', { ascending: false })
 
   // Get signed URL for download
@@ -177,20 +178,20 @@ export default async function DocumentViewPage({
               </CardContent>
             </Card>
 
-            {/* Upload Reference Images Section */}
+            {/* Upload Reference Assets Section */}
             <Card>
               <CardHeader>
                 <CardTitle>Reference Materials</CardTitle>
                 <CardDescription>
-                  Upload reference images for character designs, locations, or visual inspiration
+                  Upload scripts, outlines, character sheets, images, audio, video, and other reference materials
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <UploadImageAsset documentId={id} />
+                <UploadAsset documentId={id} />
               </CardContent>
             </Card>
 
-            {/* Display Uploaded Images */}
+            {/* Display All Assets */}
             {relatedAssets && relatedAssets.length > 0 && (
               <AssetGallery assets={relatedAssets} />
             )}
