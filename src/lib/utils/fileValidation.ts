@@ -16,24 +16,36 @@ export function validateFile(
   file: File,
   expectedType?: AssetType
 ): FileValidationResult {
+  // Get file details
+  const mimeType = file.type;
+  const ext = getFileExtension(file.name);
+
   // Detect possible types for this file
   const detectedTypes = detectAssetTypeFromFile(file);
 
-  if (detectedTypes.length === 0) {
+  // Special handling for audio files - accept audio files even if not in static mapping
+  const audioExtensions = ['mp3', 'wav', 'm4a', 'aac', 'ogg'];
+  const isAudioFile = mimeType.startsWith('audio/') || audioExtensions.includes(ext);
+
+  if (detectedTypes.length === 0 && !isAudioFile) {
     return {
       valid: false,
-      error: `Unsupported file type: ${file.type || 'unknown'} (.${getFileExtension(file.name)})`,
+      error: `Unsupported file type: ${mimeType || 'unknown'} (.${ext})`,
     };
+  }
+
+  // If audio file detected but no types returned, force VOICE_SAMPLE suggestion
+  let finalDetectedTypes = detectedTypes;
+  if (isAudioFile && detectedTypes.length === 0) {
+    finalDetectedTypes = ['VOICE_SAMPLE'];
   }
 
   // Determine category based on MIME type first, then extension
   let category: string = 'document';
-  const mimeType = file.type;
-  const ext = getFileExtension(file.name);
 
   if (mimeType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
     category = 'image';
-  } else if (mimeType.startsWith('audio/') || ['mp3', 'wav', 'm4a'].includes(ext)) {
+  } else if (mimeType.startsWith('audio/') || audioExtensions.includes(ext)) {
     category = 'audio';
   } else if (mimeType.startsWith('video/') || ['mp4', 'mov', 'webm'].includes(ext)) {
     category = 'video';
@@ -52,7 +64,16 @@ export function validateFile(
 
   // If expected type provided, validate it matches detected types
   if (expectedType) {
-    if (!detectedTypes.includes(expectedType)) {
+    // For audio files, always accept if expecting VOICE_SAMPLE or AUDIO_PILOT
+    if (isAudioFile && (expectedType === 'VOICE_SAMPLE' || expectedType === 'AUDIO_PILOT')) {
+      return {
+        valid: true,
+        suggestedTypes: [expectedType],
+        category: 'audio',
+      };
+    }
+
+    if (!finalDetectedTypes.includes(expectedType)) {
       return {
         valid: false,
         error: `This file type (${mimeType || ext}) cannot be used as ${expectedType}`,
@@ -62,7 +83,7 @@ export function validateFile(
 
   return {
     valid: true,
-    suggestedTypes: detectedTypes,
+    suggestedTypes: finalDetectedTypes,
     category,
   };
 }

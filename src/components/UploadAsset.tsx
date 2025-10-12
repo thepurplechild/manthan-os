@@ -199,11 +199,20 @@ export function UploadAsset({ documentId, onUploadComplete }: UploadAssetProps) 
     try {
       const supabase = createClient();
 
+      console.log('📤 Starting upload:', {
+        fileName: selectedFile.name,
+        fileType: selectedFile.type,
+        fileSize: selectedFile.size,
+        selectedType,
+      });
+
       // Generate storage path
       const timestamp = Date.now();
       const sanitized = sanitizeFilename(selectedFile.name);
       const filename = `${timestamp}_${sanitized}`;
       const storagePath = `${documentId}/${config.folder}/${filename}`;
+
+      console.log('📁 Storage path:', storagePath);
 
       // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
@@ -211,16 +220,22 @@ export function UploadAsset({ documentId, onUploadComplete }: UploadAssetProps) 
         .upload(storagePath, selectedFile, {
           cacheControl: '3600',
           upsert: false,
+          contentType: selectedFile.type, // Explicitly set content type
         });
 
       if (uploadError) {
+        console.error('❌ Storage upload error:', uploadError);
         throw new Error(`Upload failed: ${uploadError.message}`);
       }
+
+      console.log('✅ Storage upload successful');
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('creator-assets')
         .getPublicUrl(storagePath);
+
+      console.log('🔗 Public URL:', publicUrl);
 
       // Prepare asset metadata
       const assetMetadata: Record<string, unknown> = {};
@@ -234,9 +249,14 @@ export function UploadAsset({ documentId, onUploadComplete }: UploadAssetProps) 
 
       // Add file-specific metadata
       if (selectedFile.type.startsWith('image/')) {
-        // For images, we could add dimensions later via Image.onLoad
         assetMetadata.mimeType = selectedFile.type;
       }
+
+      console.log('💾 Creating database record:', {
+        assetType: selectedType,
+        mimeType: selectedFile.type,
+        fileSize: selectedFile.size,
+      });
 
       // Create database record
       const result = await createAssetRecord({
@@ -251,9 +271,11 @@ export function UploadAsset({ documentId, onUploadComplete }: UploadAssetProps) 
       });
 
       if (!result.success) {
+        console.error('❌ Database record creation failed:', result.error);
         throw new Error(result.error || 'Failed to create asset record');
       }
 
+      console.log('✅ Upload complete!');
       toast.success(`${config.label} uploaded successfully!`);
 
       // Reset form
@@ -268,7 +290,7 @@ export function UploadAsset({ documentId, onUploadComplete }: UploadAssetProps) 
         onUploadComplete();
       }
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('❌ Upload error:', error);
       toast.error(error instanceof Error ? error.message : 'Upload failed');
     } finally {
       setIsUploading(false);
