@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { ProcessingStatus } from '@/lib/database.types'
+import { inngest } from '@/app/api/inngest/route'
 
 export async function uploadDocument(formData: FormData) {
   const supabase = await createClient()
@@ -74,6 +75,24 @@ export async function uploadDocument(formData: FormData) {
     // Clean up uploaded file if database insert fails
     await supabase.storage.from('creator-assets').remove([filePath])
     return { error: `Database error: ${dbError.message}` }
+  }
+
+  // Send Inngest event for processing
+  try {
+    await inngest.send({
+      name: 'document.uploaded',
+      data: {
+        documentId: document.id,
+        storagePath: filePath,
+        ownerId: user.id,
+        title: file.name,
+        fileSize: file.size
+      },
+    });
+    console.log('✅ Inngest event sent:', document.id);
+  } catch (inngestError) {
+    console.error('❌ Inngest event failed:', inngestError);
+    // Don't fail the upload if event sending fails
   }
 
   revalidatePath('/dashboard')
