@@ -18,10 +18,11 @@ interface GenerationResult {
 }
 
 export async function generateImage(params: BharatDiffusionParams): Promise<GenerationResult> {
-  const apiToken = process.env.PIXELBIN_API_KEY;
+  // Try access token first, fallback to API key
+  const apiToken = process.env.PIXELBIN_ACCESS_TOKEN || process.env.PIXELBIN_API_KEY;
 
   if (!apiToken) {
-    return { success: false, error: 'PIXELBIN_API_KEY not configured' };
+    return { success: false, error: 'PixelBin credentials not configured' };
   }
 
   try {
@@ -33,9 +34,9 @@ export async function generateImage(params: BharatDiffusionParams): Promise<Gene
       }),
     );
 
-    console.log('Creating BharatDiffusion prediction...');
+    console.log('Creating BharatDiffusion prediction with token:', apiToken.substring(0, 8) + '...');
 
-    // Use the predictions.createAndWait method as shown in docs
+    // Use the predictions.createAndWait method
     const result = await pixelbin.predictions.createAndWait({
       name: "bharatDiffusion_generate",
       input: {
@@ -50,24 +51,46 @@ export async function generateImage(params: BharatDiffusionParams): Promise<Gene
       }
     });
 
-    console.log('BharatDiffusion response:', result);
+    console.log('BharatDiffusion response:', JSON.stringify(result, null, 2));
 
     // Extract image URL from result
-    // The response structure may be: result.output or result.data or result.url
-    const imageUrl = result?.output?.url || result?.output || result?.url || result?.data?.url;
+    let imageUrl: string | undefined;
+    
+    if (typeof result?.output === 'string') {
+      imageUrl = result.output;
+    } else if (result?.output?.url) {
+      imageUrl = result.output.url;
+    } else if (result?.url) {
+      imageUrl = result.url;
+    } else if (result?.data?.url) {
+      imageUrl = result.data.url;
+    }
 
     if (!imageUrl) {
       console.error('No image URL in response:', result);
-      return { success: false, error: 'No image URL in API response' };
+      return { 
+        success: false, 
+        error: 'No image URL in API response. Check console for full response.' 
+      };
     }
 
     return { success: true, imageUrl };
   } catch (error) {
     console.error('BharatDiffusion generation error:', error);
     
-    const errorMessage = error instanceof Error 
-      ? error.message 
-      : 'Generation failed';
+    // Extract detailed error message
+    let errorMessage = 'Generation failed';
+    
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'object' && error !== null) {
+      if ('message' in error) {
+        errorMessage = String((error as any).message);
+      }
+      if ('response' in error) {
+        console.error('API Error Response:', (error as any).response);
+      }
+    }
 
     return { success: false, error: errorMessage };
   }
