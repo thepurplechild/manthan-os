@@ -11,7 +11,8 @@ import {
   Menu,
   X,
   LogOut,
-  User
+  User,
+  FolderOpen
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -25,6 +26,7 @@ import { getUserProfile, logout } from '@/app/actions/auth'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
+  { name: 'Projects', href: '/dashboard/projects', icon: FolderOpen },
   { name: 'Documents', href: '/dashboard/documents', icon: FileText },
   { name: 'Upload', href: '/dashboard/upload', icon: Upload },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
