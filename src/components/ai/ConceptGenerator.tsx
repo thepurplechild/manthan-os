@@ -27,7 +27,7 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
   
   const [characterPrompt, setCharacterPrompt] = useState('');
   const [locationPrompt, setLocationPrompt] = useState('');
-  const [style, setStyle] = useState<'realistic' | 'cinematic' | 'cyberpunk' | 'digitalart' | 'fantasy' | 'anime'>('realistic');
+  const [style, setStyle] = useState<'realistic' | 'cinematic' | 'cyberpunk' | 'anime' | 'oil_painting' | 'watercolor'>('realistic');
   const [aspectRatio, setAspectRatio] = useState<'square' | 'portrait' | 'landscape'>('portrait');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
@@ -64,7 +64,7 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
 
     setIsGenerating(true);
     setGeneratedImage(null);
-    toast.info('Generating concept art... This may take 15-30 seconds');
+    toast.info('Generating concept art... This may take 30-90 seconds');
 
     try {
       console.log('🟡 Calling generateConcept action...');
@@ -225,9 +225,9 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
                   <SelectItem value="realistic">Realistic</SelectItem>
                   <SelectItem value="cinematic">Cinematic</SelectItem>
                   <SelectItem value="cyberpunk">Cyberpunk</SelectItem>
-                  <SelectItem value="digitalart">Digital Art</SelectItem>
-                  <SelectItem value="fantasy">Fantasy</SelectItem>
                   <SelectItem value="anime">Anime</SelectItem>
+                  <SelectItem value="oil_painting">Oil Painting</SelectItem>
+                  <SelectItem value="watercolor">Watercolor</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -266,7 +266,7 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
             {isGenerating ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Generating... (15-30 seconds)
+                Generating... (30-90 seconds)
               </>
             ) : (
               <>
@@ -275,6 +275,23 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
               </>
             )}
           </Button>
+
+          {isGenerating && (
+            <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200 mt-4">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                <span className="font-medium text-blue-900">Generating image...</span>
+              </div>
+              <div className="text-sm text-blue-700 space-y-1">
+                <p>• Creating AI generation job...</p>
+                <p>• This typically takes 30-90 seconds</p>
+                <p>• Processing your prompt with style: {style}</p>
+              </div>
+              <div className="text-xs text-blue-600">
+                Please keep this page open while the image generates.
+              </div>
+            </div>
+          )}
 
           {generatedImage && (
             <div className="mt-6 space-y-2">

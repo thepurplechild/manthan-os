@@ -1,14 +1,14 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { generateImage } from '@/lib/api/bharatDiffusion';
+import { generateBharatDiffusionImage } from '@/lib/api/bharatDiffusion';
 import { revalidatePath } from 'next/cache';
 
 interface GenerateConceptParams {
   projectId: string;
   prompt: string;
   conceptType: 'character' | 'location';
-  generationStyle?: 'realistic' | 'cinematic' | 'cyberpunk' | 'digitalart' | 'fantasy' | 'anime';
+  generationStyle?: 'realistic' | 'cinematic' | 'cyberpunk' | 'anime' | 'oil_painting' | 'watercolor';
   aspectRatio?: 'square' | 'portrait' | 'landscape';
 }
 
@@ -35,13 +35,11 @@ export async function generateConcept(params: GenerateConceptParams) {
   console.log('🟢 Generating concept with params:', params);
 
   // Generate image with BharatDiffusion
-  const result = await generateImage({
+  const result = await generateBharatDiffusionImage({
     prompt: params.prompt,
-    generation_style: params.generationStyle || 'realistic',
-    aspect_ratio: params.aspectRatio || 'square',
-    num_images_per_prompt: 1,
-    num_inference_steps: 20,
-    guidance_scale: 7.5,
+    style: params.generationStyle || 'realistic',
+    aspectRatio: params.aspectRatio || 'square',
+    negativePrompt: 'blurry, low quality, distorted',
   });
 
   if (!result.success || !result.imageUrl) {
