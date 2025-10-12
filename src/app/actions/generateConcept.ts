@@ -41,6 +41,7 @@ export async function generateImage(params: {
       style: params.style,
       aspectRatio: params.aspectRatio,
       negativePrompt: 'blurry, low quality, distorted, ugly, bad anatomy, watermark, text',
+      conceptType: params.conceptType,
     });
 
     if (!generationResult.success || !generationResult.imageUrl) {

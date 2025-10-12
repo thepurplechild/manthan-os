@@ -8,6 +8,7 @@ interface BharatDiffusionRequest {
   style?: 'realistic' | 'cinematic' | 'cyberpunk' | 'anime' | 'oil_painting' | 'watercolor';
   aspectRatio?: 'square' | 'portrait' | 'landscape';
   negativePrompt?: string;
+  conceptType?: 'character' | 'location';
 }
 
 interface TestConnectionResult {
@@ -73,26 +74,38 @@ function enhancePromptWithStyle(prompt: string, style?: string): string {
 }
 
 /**
- * Choose the best Segmind model based on prompt and style
+ * Choose the best Segmind model based on concept type and prompt
  */
-function selectSegmindModel(prompt: string): string {
+function selectSegmindModel(prompt: string, conceptType?: 'character' | 'location'): string {
   const lowerPrompt = prompt.toLowerCase();
-  
-  // Use Bollywood model for character/portrait prompts
+
+  // If concept type is explicitly character, use SSD-1B
+  if (conceptType === 'character') {
+    console.log('[Segmind] Selected model: SSD-1B (character concept type)');
+    return 'ssd-1b'; // Fast model, good for portraits
+  }
+
+  // If concept type is explicitly location, use SDXL
+  if (conceptType === 'location') {
+    console.log('[Segmind] Selected model: SDXL (location concept type)');
+    return 'sdxl1.0-txt2img'; // Standard SDXL
+  }
+
+  // Fallback: analyze prompt content for character keywords
   if (
-    lowerPrompt.includes('character') || 
-    lowerPrompt.includes('person') || 
+    lowerPrompt.includes('character') ||
+    lowerPrompt.includes('person') ||
     lowerPrompt.includes('actor') ||
     lowerPrompt.includes('actress') ||
     lowerPrompt.includes('face') ||
     lowerPrompt.includes('portrait')
   ) {
-    console.log('[Segmind] Selected model: SSD-1B (best for characters)');
+    console.log('[Segmind] Selected model: SSD-1B (detected character keywords)');
     return 'ssd-1b'; // Fast model, good for portraits
   }
-  
-  // Use general model for locations and scenes
-  console.log('[Segmind] Selected model: SDXL (best for scenes)');
+
+  // Default to SDXL for everything else
+  console.log('[Segmind] Selected model: SDXL (default for scenes/locations)');
   return 'sdxl1.0-txt2img'; // Standard SDXL
 }
 
@@ -117,11 +130,12 @@ export async function generateBharatDiffusionImage(
     // Enhance prompt with style
     const enhancedPrompt = enhancePromptWithStyle(params.prompt, params.style);
     const size = getImageSize(params.aspectRatio);
-    const model = selectSegmindModel(params.prompt);
+    const model = selectSegmindModel(params.prompt, params.conceptType);
 
     console.log('[Segmind] Enhanced prompt:', enhancedPrompt.substring(0, 100) + '...');
     console.log('[Segmind] Image size:', size);
     console.log('[Segmind] Model:', model);
+    console.log('[Segmind] Concept type:', params.conceptType);
 
     const endpoint = `${SEGMIND_API_BASE}/${model}`;
     console.log('[Segmind] Endpoint:', endpoint);
