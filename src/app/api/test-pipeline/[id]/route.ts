@@ -5,16 +5,16 @@ interface TestPipelineResult {
   documentId: string;
   step: string;
   success: boolean;
-  data?: any;
+  data?: Record<string, unknown>;
   error?: string;
   timing: number;
 }
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const documentId = params.id;
+  const { id: documentId } = await params;
   const results: TestPipelineResult[] = [];
 
   try {
@@ -231,9 +231,9 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const documentId = params.id;
+  const { id: documentId } = await params;
 
   try {
     // Trigger Inngest function directly

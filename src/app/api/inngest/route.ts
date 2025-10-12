@@ -16,7 +16,7 @@ const extractDocumentText = inngest.createFunction(
   },
   { event: 'document.uploaded' },
   async ({ event, step }) => {
-    const { documentId, storagePath, userId } = event.data;
+    const { documentId, storagePath } = event.data;
 
     // Step 1: Get document from database to ensure it exists and get storage path
     const document = await step.run('fetch-document', async () => {
@@ -81,10 +81,10 @@ const generateEmbeddings = inngest.createFunction(
   },
   { event: 'document.extracted' },
   async ({ event, step }) => {
-    const { documentId, textLength } = event.data;
+    const { documentId } = event.data;
 
     // Step 1: Verify document has extracted text
-    const document = await step.run('verify-extracted-text', async () => {
+    await step.run('verify-extracted-text', async () => {
       const { createClient } = await import('@/lib/supabase/server');
       const supabase = await createClient();
 
