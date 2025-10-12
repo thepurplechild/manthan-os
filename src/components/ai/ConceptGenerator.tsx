@@ -15,7 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Loader2, Sparkles, User, MapPin } from 'lucide-react';
-import { generateConcept } from '@/app/actions/generateConcept';
+import { generateImage } from '@/app/actions/generateConcept';
 import Image from 'next/image';
 
 interface ConceptGeneratorProps {
@@ -69,11 +69,11 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
     try {
       console.log('🟡 Calling generateConcept action...');
       
-      const result = await generateConcept({
+      const result = await generateImage({
         projectId,
         prompt: prompt.trim(),
         conceptType: activeTab,
-        generationStyle: style,
+        style: style,
         aspectRatio,
       });
 

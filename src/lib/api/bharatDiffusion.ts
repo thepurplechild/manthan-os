@@ -75,7 +75,7 @@ function enhancePromptWithStyle(prompt: string, style?: string): string {
 /**
  * Choose the best Segmind model based on prompt and style
  */
-function selectSegmindModel(prompt: string, style?: string): string {
+function selectSegmindModel(prompt: string): string {
   const lowerPrompt = prompt.toLowerCase();
   
   // Use Bollywood model for character/portrait prompts
@@ -117,7 +117,7 @@ export async function generateBharatDiffusionImage(
     // Enhance prompt with style
     const enhancedPrompt = enhancePromptWithStyle(params.prompt, params.style);
     const size = getImageSize(params.aspectRatio);
-    const model = selectSegmindModel(params.prompt, params.style);
+    const model = selectSegmindModel(params.prompt);
 
     console.log('[Segmind] Enhanced prompt:', enhancedPrompt.substring(0, 100) + '...');
     console.log('[Segmind] Image size:', size);
