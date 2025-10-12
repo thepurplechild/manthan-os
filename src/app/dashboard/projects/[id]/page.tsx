@@ -8,6 +8,7 @@ import { ASSET_TYPE_COLORS, ASSET_TYPE_LABELS, formatFileSize, getTotalAssetCoun
 import type { Project } from '@/lib/types/projects';
 import { DeleteAssetButton } from '@/components/assets/DeleteAssetButton';
 import { DeleteProjectButton } from '@/components/projects/DeleteProjectButton';
+import { EditAssetDialog } from '@/components/assets/EditAssetDialog';
 
 interface ProjectPageProps {
   params: Promise<{ id: string }>;
@@ -135,6 +136,12 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                         </Link>
                       </Button>
                     )}
+                    <EditAssetDialog
+                      assetId={doc.id}
+                      currentTitle={doc.title}
+                      currentType={doc.asset_type}
+                      currentMetadata={doc.asset_metadata}
+                    />
                     <DeleteAssetButton
                       assetId={doc.id}
                       assetTitle={doc.title}
