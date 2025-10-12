@@ -15,6 +15,14 @@ export interface CharacterPrompt {
   role: string;
 }
 
+interface Character {
+  name: string;
+  role: string;
+  physicalDescription?: string;
+  personality?: string[];
+  castingSuggestions?: string[];
+}
+
 export interface LocationPrompt {
   locationName: string;
   prompt: string;
@@ -71,12 +79,11 @@ export async function extractCharacterPrompts(documentId: string): Promise<Visua
     console.log('[ExtractPrompts] Found', characters.length, 'characters');
 
     const characterPrompts: CharacterPrompt[] = characters
-      .filter((char: any) => char.role === 'protagonist' || char.role === 'supporting')
-      .map((character: any) => {
+      .filter((char: Character) => char.role === 'protagonist' || char.role === 'supporting')
+      .map((character: Character) => {
         // Extract visual elements from character data
         const physicalDesc = character.physicalDescription || 'Indian character';
         const personality = character.personality?.slice(0, 3)?.join(', ') || 'expressive';
-        const age = extractAgeFromDescription(physicalDesc);
         const clothing = extractClothingFromDescription(physicalDesc);
 
         // Generate optimized prompt
@@ -190,7 +197,6 @@ function generateLocationPromptsFromStory(
 
   // Analyze synopsis for location keywords
   const isPunjabi = synopsis.toLowerCase().includes('punjabi') || synopsis.toLowerCase().includes('village');
-  const isUrban = synopsis.toLowerCase().includes('mumbai') || synopsis.toLowerCase().includes('city');
   const isIndian = synopsis.toLowerCase().includes('indian') || isPunjabi;
 
   // Base style string
@@ -237,20 +243,6 @@ function generateLocationPromptsFromStory(
   }
 
   return locations;
-}
-
-/**
- * Helper function to extract age information from physical description
- */
-function extractAgeFromDescription(description: string): string {
-  const lowerDesc = description.toLowerCase();
-
-  if (lowerDesc.includes('teen') || lowerDesc.includes('young')) return 'young';
-  if (lowerDesc.includes('middle-aged') || lowerDesc.includes('40s')) return 'middle-aged';
-  if (lowerDesc.includes('elderly') || lowerDesc.includes('old')) return 'elderly';
-  if (lowerDesc.includes('late') && lowerDesc.includes('30s')) return 'adult';
-
-  return 'adult';
 }
 
 /**

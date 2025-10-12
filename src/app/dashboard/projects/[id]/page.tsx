@@ -7,9 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ASSET_TYPE_COLORS, ASSET_TYPE_LABELS, formatFileSize, getTotalAssetCount } from '@/lib/types/projects';
 import type { Project } from '@/lib/types/projects';
-import { DeleteAssetButton } from '@/components/assets/DeleteAssetButton';
 import { DeleteProjectButton } from '@/components/projects/DeleteProjectButton';
-import { EditAssetDialog } from '@/components/assets/EditAssetDialog';
 import { ConceptGenerator } from '@/components/ai/ConceptGenerator';
 import { AssetGallery } from '@/components/AssetGallery';
 
