@@ -1,5 +1,3 @@
-// FILE: src/components/projects/NewProjectForm.tsx (NEW FILE)
-
 'use client';
 
 import { useState } from 'react';
