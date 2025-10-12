@@ -12,77 +12,59 @@ export const inngest = new Inngest({
 const extractDocumentText = inngest.createFunction(
   {
     id: 'extract-document-text',
-    retries: 3
+    retries: 3,
   },
   { event: 'document.uploaded' },
   async ({ event, step }) => {
-    const { documentId, storagePath } = event.data;
+    const { documentId } = event.data;
 
-    // Step 1: Get document from database to ensure it exists and get storage path
+    // Fetch document with its public storage_url
     const document = await step.run('fetch-document', async () => {
       const { createClient } = await import('@/lib/supabase/server');
       const supabase = await createClient();
 
       const { data, error } = await supabase
         .from('documents')
-        .select('*')
+        .select('id, storage_url, storage_path, title')
         .eq('id', documentId)
         .single();
 
-      if (error) throw new Error(`Failed to fetch document: ${error.message}`);
+      if (error || !data) {
+        throw new Error(`Document fetch failed: ${error?.message || 'Not found'}`);
+      }
+
+      console.log('📄 Document fetched:', data.title, data.id);
+      console.log('📍 Storage URL:', data.storage_url);
       return data;
     });
 
-    // Step 2: Generate signed URL for Railway worker access
-    const signedUrl = await step.run('generate-signed-url', async () => {
-      const { createClient } = await import('@/lib/supabase/server');
-      const supabase = await createClient();
-
-      const { data: signedUrlData, error } = await supabase.storage
-        .from('creator-assets')
-        .createSignedUrl(document.storage_path || storagePath, 3600); // Valid for 1 hour
-
-      if (error) throw new Error(`Failed to generate signed URL: ${error.message}`);
-      return signedUrlData.signedUrl;
-    });
-
-    // Step 3: Call Railway worker to extract text
-    const result = await step.run('call-railway-worker', async () => {
+    // Call Railway worker with public URL
+    const result = await step.run('extract-text', async () => {
       const workerUrl = process.env.RAILWAY_WORKER_URL || 'https://manthan-os-production.up.railway.app';
+
+      console.log('🚂 Calling Railway:', `${workerUrl}/extract`);
 
       const response = await fetch(`${workerUrl}/extract`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.WORKER_SECRET}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          documentId,
-          storageUrl: signedUrl
-        })
+          document_id: documentId,
+          storage_url: document.storage_url, // Use existing public URL
+        }),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Railway worker failed: ${errorText}`);
+        console.error('❌ Railway extraction failed:', errorText);
+        throw new Error(`Extraction failed: ${errorText}`);
       }
 
-      return await response.json();
+      const data = await response.json();
+      console.log('✅ Text extracted:', data.character_count || 'unknown', 'characters');
+      return data;
     });
 
-    // If extraction succeeded, trigger embedding generation
-    if (result.success) {
-      await step.sendEvent('trigger-embeddings', {
-        name: 'document.extracted',
-        data: {
-          documentId,
-          textLength: result.textLength
-        }
-      });
-    }
-
-    console.log('✅ Document text extracted successfully:', documentId);
-    return { success: true, result };
+    return { success: true, ...result };
   }
 );
 
