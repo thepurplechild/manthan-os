@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
-import { ASSET_TYPE_COLORS, ASSET_TYPE_LABELS, formatFileSize } from '@/lib/types/projects';
+import { ASSET_TYPE_COLORS, ASSET_TYPE_LABELS, formatFileSize, getTotalAssetCount } from '@/lib/types/projects';
 import type { Project } from '@/lib/types/projects';
+import { DeleteAssetButton } from '@/components/assets/DeleteAssetButton';
+import { DeleteProjectButton } from '@/components/projects/DeleteProjectButton';
 
 interface ProjectPageProps {
   params: Promise<{ id: string }>;
@@ -78,12 +80,19 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
             </p>
           </div>
 
-          <Button asChild>
-            <Link href={`/dashboard/projects/${id}/upload`}>
-              <Upload className="h-4 w-4 mr-2" />
-              Upload Assets
-            </Link>
-          </Button>
+          <div className="flex gap-2">
+            <DeleteProjectButton
+              projectId={id}
+              projectTitle={projectData.title}
+              assetCount={getTotalAssetCount(projectData.asset_counts)}
+            />
+            <Button asChild>
+              <Link href={`/dashboard/projects/${id}/upload`}>
+                <Upload className="h-4 w-4 mr-2" />
+                Upload Assets
+              </Link>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -118,13 +127,19 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                     </div>
                   </div>
 
-                  {doc.asset_type === 'SCRIPT' && (
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={`/dashboard/documents/${doc.id}`}>
-                        View Analysis
-                      </Link>
-                    </Button>
-                  )}
+                  <div className="flex gap-2">
+                    {doc.asset_type === 'SCRIPT' && (
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={`/dashboard/documents/${doc.id}`}>
+                          View Analysis
+                        </Link>
+                      </Button>
+                    )}
+                    <DeleteAssetButton
+                      assetId={doc.id}
+                      assetTitle={doc.title}
+                    />
+                  </div>
                 </div>
               </div>
             ))}

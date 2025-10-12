@@ -4,17 +4,17 @@ import { Project, ASSET_TYPE_COLORS, ASSET_TYPE_LABELS, formatFileSize, getTotal
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { FileText, Trash2, ExternalLink } from 'lucide-react';
+import { FileText, ExternalLink } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import Image from 'next/image';
 import Link from 'next/link';
+import { DeleteProjectButton } from './DeleteProjectButton';
 
 interface ProjectCardProps {
   project: Project;
-  onDelete?: (projectId: string) => void;
 }
 
-export function ProjectCard({ project, onDelete }: ProjectCardProps) {
+export function ProjectCard({ project }: ProjectCardProps) {
   const totalAssets = getTotalAssetCount(project.asset_counts);
   const assetEntries = project.asset_counts ? Object.entries(project.asset_counts) : [];
 
@@ -62,19 +62,13 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
             )}
           </div>
 
-          {onDelete && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={(e) => {
-                e.preventDefault();
-                onDelete(project.id);
-              }}
-              className="opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
-          )}
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+            <DeleteProjectButton
+              projectId={project.id}
+              projectTitle={project.title}
+              assetCount={getTotalAssetCount(project.asset_counts)}
+            />
+          </div>
         </div>
       </CardHeader>
 
