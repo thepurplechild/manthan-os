@@ -289,3 +289,25 @@ export function formatFileSize(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
+
+// Sanitize filename for safe storage
+export function sanitizeFilename(filename: string): string {
+  // Remove special characters, keep alphanumeric, dash, underscore, dot
+  return filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
+// Asset type configuration for storage paths
+export const ASSET_TYPE_CONFIG: Record<AssetType, { folder: string }> = {
+  SCRIPT: { folder: 'scripts' },
+  OUTLINE: { folder: 'outlines' },
+  CHARACTER_SHEET: { folder: 'characters' },
+  DIALOGUE_SAMPLE: { folder: 'dialogue' },
+  TREATMENT: { folder: 'treatments' },
+  VOICE_SAMPLE: { folder: 'voice' },
+  AUDIO_PILOT: { folder: 'audio' },
+  IMAGE_REFERENCE: { folder: 'images' },
+  IMAGE_CONCEPT: { folder: 'concepts' },
+  VIDEO_REFERENCE: { folder: 'videos' },
+  MOOD_BOARD: { folder: 'moodboards' },
+  PITCH_DECK: { folder: 'pitches' },
+};
