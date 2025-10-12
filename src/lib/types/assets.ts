@@ -136,30 +136,127 @@ export function isValidMimeTypeForAssetType(mimeType: string, assetType: AssetTy
   return possibleTypes.includes(assetType);
 }
 
-// Smart detection based on filename patterns
+/**
+ * Detects the most appropriate asset type(s) for a given file
+ * Priority: MIME type → Filename refinement → Extension fallback
+ */
 export function detectAssetTypeFromFile(file: File): AssetType[] {
-  const ext = file.name.split('.').pop()?.toLowerCase();
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
   const name = file.name.toLowerCase();
+  const mimeType = file.type;
 
-  // Extension-based detection (highest priority)
-  if (ext === 'fdx') return ['SCRIPT'];
+  // ═══════════════════════════════════════════════════════════
+  // PRIORITY 1: MIME TYPE DETECTION (Most reliable)
+  // ═══════════════════════════════════════════════════════════
 
-  // Filename pattern detection
-  if (name.includes('outline') || name.includes('beat')) return ['OUTLINE'];
-  if (name.includes('character') && !name.includes('concept')) return ['CHARACTER_SHEET'];
-  if (name.includes('scene') || name.includes('dialogue')) return ['DIALOGUE_SAMPLE'];
-  if (name.includes('mood') || name.includes('board')) return ['MOOD_BOARD'];
-  if (name.includes('concept') || name.includes('art')) return ['IMAGE_CONCEPT'];
-  if (name.includes('voice') || name.includes('sample')) return ['VOICE_SAMPLE'];
-  if (name.includes('reference')) {
-    if (ext && ['mp4', 'mov', 'webm'].includes(ext)) return ['VIDEO_REFERENCE'];
-    if (ext && ['jpg', 'jpeg', 'png', 'webp'].includes(ext)) return ['IMAGE_REFERENCE'];
+  // IMAGE FILES - Detect by MIME type first
+  if (mimeType.startsWith('image/') || ['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
+    // Refine by filename pattern within images
+    if (name.includes('concept') || name.includes('art')) {
+      return ['IMAGE_CONCEPT'];
+    }
+    // Default all images to IMAGE_REFERENCE
+    return ['IMAGE_REFERENCE'];
   }
 
-  // Fall back to MIME type detection
-  const mimeTypes = MIME_TYPE_TO_ASSET_TYPE[file.type];
-  if (mimeTypes && mimeTypes.length > 0) return mimeTypes;
+  // AUDIO FILES - Detect by MIME type first
+  if (mimeType.startsWith('audio/') || ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a'].includes(mimeType)) {
+    return ['VOICE_SAMPLE'];
+  }
 
+  // VIDEO FILES - Detect by MIME type first
+  if (mimeType.startsWith('video/') || ['video/mp4', 'video/quicktime', 'video/webm'].includes(mimeType)) {
+    return ['VIDEO_REFERENCE'];
+  }
+
+  // DOCUMENT FILES - Detect by MIME type, refine by filename
+  // PDF files can be multiple types - use filename to disambiguate
+  if (mimeType === 'application/pdf') {
+    if (name.includes('script')) return ['SCRIPT'];
+    if (name.includes('outline') || name.includes('beat')) return ['OUTLINE'];
+    if (name.includes('character')) return ['CHARACTER_SHEET'];
+    if (name.includes('scene') || name.includes('dialogue')) return ['DIALOGUE_SAMPLE'];
+    if (name.includes('mood') || name.includes('board')) return ['MOOD_BOARD'];
+    // Default PDF to script if no pattern matches
+    return ['SCRIPT', 'OUTLINE', 'MOOD_BOARD'];
+  }
+
+  // WORD DOCUMENTS - Can be multiple types
+  if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      mimeType === 'application/msword') {
+    if (name.includes('script')) return ['SCRIPT'];
+    if (name.includes('outline') || name.includes('beat')) return ['OUTLINE'];
+    if (name.includes('character')) return ['CHARACTER_SHEET'];
+    if (name.includes('scene') || name.includes('dialogue')) return ['DIALOGUE_SAMPLE'];
+    // Default Word docs to outline/character sheet
+    return ['OUTLINE', 'CHARACTER_SHEET'];
+  }
+
+  // TEXT FILES - Usually outline, character, or dialogue
+  if (mimeType === 'text/plain') {
+    if (name.includes('outline') || name.includes('beat')) return ['OUTLINE'];
+    if (name.includes('character')) return ['CHARACTER_SHEET'];
+    if (name.includes('scene') || name.includes('dialogue')) return ['DIALOGUE_SAMPLE'];
+    // Default text files to outline/character
+    return ['OUTLINE', 'CHARACTER_SHEET', 'DIALOGUE_SAMPLE'];
+  }
+
+  // POWERPOINT - Mood boards
+  if (mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+      mimeType === 'application/vnd.ms-powerpoint') {
+    return ['MOOD_BOARD'];
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // PRIORITY 2: EXTENSION-BASED DETECTION (For special cases)
+  // ═══════════════════════════════════════════════════════════
+
+  // Final Draft files (.fdx) - Special case, highest priority for scripts
+  if (ext === 'fdx') {
+    return ['SCRIPT'];
+  }
+
+  // Image extensions (in case MIME type is missing or generic)
+  if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) {
+    if (name.includes('concept') || name.includes('art')) return ['IMAGE_CONCEPT'];
+    return ['IMAGE_REFERENCE'];
+  }
+
+  // Audio extensions (backup)
+  if (['mp3', 'wav', 'm4a', 'aac'].includes(ext)) {
+    return ['VOICE_SAMPLE'];
+  }
+
+  // Video extensions (backup)
+  if (['mp4', 'mov', 'webm', 'avi'].includes(ext)) {
+    return ['VIDEO_REFERENCE'];
+  }
+
+  // Document extensions (backup)
+  if (['pdf'].includes(ext)) {
+    return ['SCRIPT', 'OUTLINE', 'MOOD_BOARD'];
+  }
+  if (['docx', 'doc'].includes(ext)) {
+    return ['OUTLINE', 'CHARACTER_SHEET'];
+  }
+  if (['txt'].includes(ext)) {
+    return ['OUTLINE', 'CHARACTER_SHEET', 'DIALOGUE_SAMPLE'];
+  }
+  if (['pptx', 'ppt'].includes(ext)) {
+    return ['MOOD_BOARD'];
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // PRIORITY 3: FALLBACK TO MIME TYPE MAPPING
+  // ═══════════════════════════════════════════════════════════
+
+  // Use the static mapping as final fallback
+  const mappedTypes = MIME_TYPE_TO_ASSET_TYPE[mimeType];
+  if (mappedTypes && mappedTypes.length > 0) {
+    return mappedTypes;
+  }
+
+  // No detection possible
   return [];
 }
 

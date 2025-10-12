@@ -1,5 +1,4 @@
 import {
-  MIME_TYPE_TO_ASSET_TYPE,
   MAX_FILE_SIZES,
   detectAssetTypeFromFile,
   getFileExtension,
@@ -21,25 +20,26 @@ export function validateFile(
   const detectedTypes = detectAssetTypeFromFile(file);
 
   if (detectedTypes.length === 0) {
-    // Check MIME type as fallback
-    const mimeTypes = MIME_TYPE_TO_ASSET_TYPE[file.type];
-    if (!mimeTypes || mimeTypes.length === 0) {
-      return {
-        valid: false,
-        error: `Unsupported file type: ${file.type || 'unknown'}`,
-      };
-    }
+    return {
+      valid: false,
+      error: `Unsupported file type: ${file.type || 'unknown'} (.${getFileExtension(file.name)})`,
+    };
   }
 
-  // Determine category
+  // Determine category based on MIME type first, then extension
   let category: string = 'document';
+  const mimeType = file.type;
   const ext = getFileExtension(file.name);
 
-  if (file.type.startsWith('image/')) category = 'image';
-  else if (file.type.startsWith('audio/')) category = 'audio';
-  else if (file.type.startsWith('video/')) category = 'video';
-  else if (file.type.startsWith('text/')) category = 'text';
-  else if (ext === 'fdx') category = 'text';
+  if (mimeType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+    category = 'image';
+  } else if (mimeType.startsWith('audio/') || ['mp3', 'wav', 'm4a'].includes(ext)) {
+    category = 'audio';
+  } else if (mimeType.startsWith('video/') || ['mp4', 'mov', 'webm'].includes(ext)) {
+    category = 'video';
+  } else if (mimeType.startsWith('text/') || ext === 'txt') {
+    category = 'text';
+  }
 
   // Check file size against category limit
   const maxSize = MAX_FILE_SIZES[category] || MAX_FILE_SIZES.document;
@@ -50,13 +50,12 @@ export function validateFile(
     };
   }
 
-  // If expected type provided, validate it matches
+  // If expected type provided, validate it matches detected types
   if (expectedType) {
-    const allPossibleTypes = [...detectedTypes, ...(MIME_TYPE_TO_ASSET_TYPE[file.type] || [])];
-    if (!allPossibleTypes.includes(expectedType)) {
+    if (!detectedTypes.includes(expectedType)) {
       return {
         valid: false,
-        error: `File type ${file.type} is not valid for ${expectedType}`,
+        error: `This file type (${mimeType || ext}) cannot be used as ${expectedType}`,
       };
     }
   }
