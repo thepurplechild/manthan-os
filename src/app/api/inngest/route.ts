@@ -16,11 +16,28 @@ const extractDocumentText = inngest.createFunction(
   },
   { event: 'document.uploaded' },
   async ({ event, step }) => {
-    const { documentId, storagePath } = event.data;
+    const { documentId, storagePath, userId } = event.data;
 
-    // Call Railway worker to extract text
-    const result = await step.run('call-railway-extract', async () => {
-      const response = await fetch(`${process.env.RAILWAY_WORKER_URL}/extract`, {
+    // Step 1: Get document from database to ensure it exists and get storage path
+    const document = await step.run('fetch-document', async () => {
+      const { createClient } = await import('@/lib/supabase/server');
+      const supabase = await createClient();
+
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('id', documentId)
+        .single();
+
+      if (error) throw new Error(`Failed to fetch document: ${error.message}`);
+      return data;
+    });
+
+    // Step 2: Call Railway worker to extract text
+    const result = await step.run('call-railway-worker', async () => {
+      const workerUrl = process.env.RAILWAY_WORKER_URL || 'https://manthan-os-production.up.railway.app';
+
+      const response = await fetch(`${workerUrl}/extract`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -28,13 +45,13 @@ const extractDocumentText = inngest.createFunction(
         },
         body: JSON.stringify({
           documentId,
-          storagePath
+          storagePath: document.storage_path || storagePath
         })
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Railway worker failed: ${error}`);
+        const errorText = await response.text();
+        throw new Error(`Railway worker failed: ${errorText}`);
       }
 
       return await response.json();
@@ -51,6 +68,7 @@ const extractDocumentText = inngest.createFunction(
       });
     }
 
+    console.log('✅ Document text extracted successfully:', documentId);
     return { success: true, result };
   }
 );
@@ -63,10 +81,30 @@ const generateEmbeddings = inngest.createFunction(
   },
   { event: 'document.extracted' },
   async ({ event, step }) => {
-    const { documentId } = event.data;
+    const { documentId, textLength } = event.data;
 
+    // Step 1: Verify document has extracted text
+    const document = await step.run('verify-extracted-text', async () => {
+      const { createClient } = await import('@/lib/supabase/server');
+      const supabase = await createClient();
+
+      const { data, error } = await supabase
+        .from('documents')
+        .select('id, extracted_text, processing_status')
+        .eq('id', documentId)
+        .single();
+
+      if (error) throw new Error(`Failed to fetch document: ${error.message}`);
+      if (!data.extracted_text) throw new Error('No extracted text found for document');
+
+      return data;
+    });
+
+    // Step 2: Call Railway worker to generate embeddings
     const result = await step.run('call-railway-embed', async () => {
-      const response = await fetch(`${process.env.RAILWAY_WORKER_URL}/embed`, {
+      const workerUrl = process.env.RAILWAY_WORKER_URL || 'https://manthan-os-production.up.railway.app';
+
+      const response = await fetch(`${workerUrl}/embed`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -76,13 +114,14 @@ const generateEmbeddings = inngest.createFunction(
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Embedding generation failed: ${error}`);
+        const errorText = await response.text();
+        throw new Error(`Embedding generation failed: ${errorText}`);
       }
 
       return await response.json();
     });
 
+    console.log('✅ Document embeddings generated successfully:', documentId, `(${result.numChunks} chunks)`);
     return { success: true, result };
   }
 );
