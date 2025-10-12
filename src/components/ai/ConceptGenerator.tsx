@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -23,6 +24,8 @@ interface ConceptGeneratorProps {
 }
 
 export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
+  console.log('🟦 ConceptGenerator mounted with projectId:', projectId);
+  
   const [characterPrompt, setCharacterPrompt] = useState('');
   const [locationPrompt, setLocationPrompt] = useState('');
   const [style, setStyle] = useState<'realistic' | 'cinematic' | 'cyberpunk' | 'digitalart' | 'fantasy' | 'anime'>('realistic');
@@ -32,23 +35,41 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
   const [activeTab, setActiveTab] = useState<'character' | 'location'>('character');
 
   const handleGenerate = async () => {
+    console.log('🔵 handleGenerate called');
+    console.log('🔵 activeTab:', activeTab);
+    console.log('🔵 projectId:', projectId);
+    
     const prompt = activeTab === 'character' ? characterPrompt : locationPrompt;
+    console.log('🔵 prompt:', prompt);
 
     if (!prompt.trim()) {
+      console.log('❌ Empty prompt');
       toast.error('Please enter a description');
       return;
     }
 
     if (prompt.trim().length < 3) {
+      console.log('❌ Prompt too short:', prompt.trim().length);
       toast.error('Description must be at least 3 characters');
       return;
     }
+
+    console.log('🟢 Validation passed, starting generation...');
+    console.log('🟢 Generation params:', {
+      projectId,
+      prompt: prompt.trim(),
+      conceptType: activeTab,
+      generationStyle: style,
+      aspectRatio,
+    });
 
     setIsGenerating(true);
     setGeneratedImage(null);
     toast.info('Generating concept art... This may take 15-30 seconds');
 
     try {
+      console.log('🟡 Calling generateConcept action...');
+      
       const result = await generateConcept({
         projectId,
         prompt: prompt.trim(),
@@ -57,16 +78,24 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
         aspectRatio,
       });
 
+      console.log('🟣 generateConcept result:', result);
+
       if (result.success && result.imageUrl) {
+        console.log('✅ Generation successful!');
+        console.log('✅ Image URL:', result.imageUrl);
         setGeneratedImage(result.imageUrl);
         toast.success('Concept generated and saved to project!');
       } else {
+        console.error('❌ Generation failed:', result.error);
         toast.error(result.error || 'Failed to generate concept');
       }
     } catch (error) {
-      console.error('Generation error:', error);
+      console.error('💥 Generation error (caught):', error);
+      console.error('💥 Error type:', typeof error);
+      console.error('💥 Error details:', JSON.stringify(error, null, 2));
       toast.error('An error occurred during generation');
     } finally {
+      console.log('🏁 Generation complete, setting isGenerating to false');
       setIsGenerating(false);
     }
   };
@@ -98,7 +127,10 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'character' | 'location')}>
+        <Tabs value={activeTab} onValueChange={(v) => {
+          console.log('📑 Tab changed to:', v);
+          setActiveTab(v as 'character' | 'location');
+        }}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="character">
               <User className="h-4 w-4 mr-2" />
@@ -116,7 +148,10 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
               <Textarea
                 id="character-prompt"
                 value={characterPrompt}
-                onChange={(e) => setCharacterPrompt(e.target.value)}
+                onChange={(e) => {
+                  console.log('✏️ Character prompt changed:', e.target.value.substring(0, 50));
+                  setCharacterPrompt(e.target.value);
+                }}
                 placeholder="Describe your character in detail..."
                 rows={4}
                 disabled={isGenerating}
@@ -127,7 +162,10 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
                     key={i}
                     variant="outline"
                     size="sm"
-                    onClick={() => setCharacterPrompt(example)}
+                    onClick={() => {
+                      console.log('📋 Example', i + 1, 'clicked');
+                      setCharacterPrompt(example);
+                    }}
                     disabled={isGenerating}
                   >
                     Example {i + 1}
@@ -143,7 +181,10 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
               <Textarea
                 id="location-prompt"
                 value={locationPrompt}
-                onChange={(e) => setLocationPrompt(e.target.value)}
+                onChange={(e) => {
+                  console.log('✏️ Location prompt changed:', e.target.value.substring(0, 50));
+                  setLocationPrompt(e.target.value);
+                }}
                 placeholder="Describe the location or setting..."
                 rows={4}
                 disabled={isGenerating}
@@ -154,7 +195,10 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
                     key={i}
                     variant="outline"
                     size="sm"
-                    onClick={() => setLocationPrompt(example)}
+                    onClick={() => {
+                      console.log('📋 Example', i + 1, 'clicked');
+                      setLocationPrompt(example);
+                    }}
                     disabled={isGenerating}
                   >
                     Example {i + 1}
@@ -167,7 +211,14 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <div className="space-y-2">
               <Label htmlFor="style">Style</Label>
-              <Select value={style} onValueChange={(v: 'realistic' | 'cinematic' | 'cyberpunk' | 'digitalart' | 'fantasy' | 'anime') => setStyle(v)} disabled={isGenerating}>
+              <Select 
+                value={style} 
+                onValueChange={(v: any) => {
+                  console.log('🎨 Style changed to:', v);
+                  setStyle(v);
+                }} 
+                disabled={isGenerating}
+              >
                 <SelectTrigger id="style">
                   <SelectValue />
                 </SelectTrigger>
@@ -184,7 +235,14 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
 
             <div className="space-y-2">
               <Label htmlFor="aspect-ratio">Aspect Ratio</Label>
-              <Select value={aspectRatio} onValueChange={(v: 'square' | 'portrait' | 'landscape') => setAspectRatio(v)} disabled={isGenerating}>
+              <Select 
+                value={aspectRatio} 
+                onValueChange={(v: any) => {
+                  console.log('📐 Aspect ratio changed to:', v);
+                  setAspectRatio(v);
+                }} 
+                disabled={isGenerating}
+              >
                 <SelectTrigger id="aspect-ratio">
                   <SelectValue />
                 </SelectTrigger>
@@ -198,7 +256,10 @@ export function ConceptGenerator({ projectId }: ConceptGeneratorProps) {
           </div>
 
           <Button
-            onClick={handleGenerate}
+            onClick={() => {
+              console.log('🖱️ Generate button clicked');
+              handleGenerate();
+            }}
             disabled={isGenerating}
             className="w-full mt-4"
             size="lg"
