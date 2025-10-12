@@ -73,6 +73,12 @@ export function BatchUpload({ projectId }: BatchUploadProps) {
     const supabase = createClient();
 
     try {
+      // Get current user first - CRITICAL FIX
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        throw new Error('Not authenticated');
+      }
+
       // Update status
       setFiles(prev => prev.map(f =>
         f.id === fileUpload.id ? { ...f, status: 'uploading' as const, progress: 0 } : f
@@ -106,10 +112,11 @@ export function BatchUpload({ projectId }: BatchUploadProps) {
         .from('creator-assets')
         .getPublicUrl(storagePath);
 
-      // Create database record
+      // Create database record - FIXED: Added owner_id
       const { error: dbError } = await supabase
         .from('documents')
         .insert({
+          owner_id: user.id,  // ✅ CRITICAL FIX - Added owner_id
           project_id: projectId,
           title: fileUpload.file.name,
           asset_type: fileUpload.suggestedType,
