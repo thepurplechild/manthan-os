@@ -51,11 +51,21 @@ export const MIME_TYPE_TO_ASSET_TYPE: Record<string, AssetType[]> = {
   'image/png': ['IMAGE_REFERENCE', 'IMAGE_CONCEPT'],
   'image/webp': ['IMAGE_REFERENCE', 'IMAGE_CONCEPT'],
 
-  // Audio
+  // Audio - ALL VARIANTS
   'audio/mpeg': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
+  'audio/mp3': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
+  'audio/mpeg3': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
+  'audio/x-mpeg': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
+  'audio/x-mpeg-3': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
   'audio/wav': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
+  'audio/wave': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
+  'audio/x-wav': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
   'audio/mp4': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
   'audio/x-m4a': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
+  'audio/m4a': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
+  'audio/aac': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
+  'audio/x-aac': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
+  'audio/ogg': ['VOICE_SAMPLE', 'AUDIO_PILOT'],
 
   // Video
   'video/mp4': ['VIDEO_REFERENCE'],
@@ -159,8 +169,14 @@ export function detectAssetTypeFromFile(file: File): AssetType[] {
     return ['IMAGE_REFERENCE'];
   }
 
-  // AUDIO FILES - Detect by MIME type first
-  if (mimeType.startsWith('audio/') || ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a'].includes(mimeType)) {
+  // AUDIO FILES - COMPREHENSIVE DETECTION
+  // Check MIME type OR extension (since some browsers don't set MIME for audio)
+  const audioExtensions = ['mp3', 'wav', 'm4a', 'aac', 'ogg'];
+  const isAudioMime = mimeType.startsWith('audio/');
+  const isAudioExt = audioExtensions.includes(ext);
+
+  if (isAudioMime || isAudioExt) {
+    console.log('✅ Audio file detected:', { mimeType, ext }); // Debug
     return ['VOICE_SAMPLE'];
   }
 
@@ -223,7 +239,7 @@ export function detectAssetTypeFromFile(file: File): AssetType[] {
   }
 
   // Audio extensions (backup)
-  if (['mp3', 'wav', 'm4a', 'aac'].includes(ext)) {
+  if (['mp3', 'wav', 'm4a', 'aac', 'ogg'].includes(ext)) {
     return ['VOICE_SAMPLE'];
   }
 

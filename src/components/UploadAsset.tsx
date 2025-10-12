@@ -95,7 +95,7 @@ const ASSET_TYPE_CONFIG = {
     label: 'Voice Sample',
     description: 'Character voice recording',
     icon: Mic,
-    accept: 'audio/mpeg,audio/wav,audio/mp4,.mp3,.wav,.m4a',
+    accept: 'audio/*,.mp3,.wav,.m4a,.aac,.ogg',
     maxSize: 50 * 1024 * 1024,
     folder: 'audio/voices',
     metadataFields: ['characterName', 'emotion'],
@@ -142,8 +142,34 @@ export function UploadAsset({ documentId, onUploadComplete }: UploadAssetProps) 
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file
-    const validation = validateFile(file, selectedType);
+    console.log('📁 File selected:', {
+      name: file.name,
+      type: file.type || 'no MIME type',
+      size: file.size,
+      extension: file.name.split('.').pop()?.toLowerCase()
+    });
+
+    // Detect suggested types FIRST (before validation)
+    const suggestedTypes = detectAssetTypeFromFile(file);
+    console.log('💡 Suggested types:', suggestedTypes);
+
+    // Auto-update type if detected type is different from current selection
+    if (suggestedTypes.length > 0) {
+      const suggested = suggestedTypes[0];
+      // ALWAYS update to suggested type (remove the condition check)
+      if (ASSET_TYPE_CONFIG[suggested as keyof typeof ASSET_TYPE_CONFIG]) {
+        console.log('🔄 Auto-updating type from', selectedType, 'to', suggested);
+        setSelectedType(suggested as keyof typeof ASSET_TYPE_CONFIG);
+        // Show toast notification
+        const typeConfig = ASSET_TYPE_CONFIG[suggested as keyof typeof ASSET_TYPE_CONFIG];
+        toast.info(`Detected as ${typeConfig.label}`);
+      }
+    }
+
+    // NOW validate with the correct type
+    const validation = validateFile(file, suggestedTypes[0]);
+    console.log('✅ Validation result:', validation);
+
     if (!validation.valid) {
       toast.error(validation.error || 'Invalid file');
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -151,20 +177,11 @@ export function UploadAsset({ documentId, onUploadComplete }: UploadAssetProps) 
     }
 
     // Check file size
+    const config = ASSET_TYPE_CONFIG[selectedType];
     if (file.size > config.maxSize) {
       toast.error(`File too large. Maximum size: ${(config.maxSize / 1024 / 1024).toFixed(0)}MB`);
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
-    }
-
-    // Auto-suggest type based on file
-    const suggestedTypes = detectAssetTypeFromFile(file);
-    if (suggestedTypes.length > 0 && suggestedTypes[0] !== selectedType) {
-      const suggested = suggestedTypes[0];
-      if (ASSET_TYPE_CONFIG[suggested as keyof typeof ASSET_TYPE_CONFIG]) {
-        toast.info(`This looks like a ${ASSET_TYPE_CONFIG[suggested as keyof typeof ASSET_TYPE_CONFIG].label}. Type updated.`);
-        setSelectedType(suggested as keyof typeof ASSET_TYPE_CONFIG);
-      }
     }
 
     setSelectedFile(file);
