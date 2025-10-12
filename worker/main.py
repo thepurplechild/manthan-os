@@ -34,20 +34,13 @@ def supabase_request(method: str, endpoint: str, json_data: Dict = None) -> Dict
         return response.json()
     return {}
 
-def download_from_storage(storage_path: str) -> bytes:
-    """Download file from Supabase Storage"""
-    headers = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}"
-    }
-
-    url = f"{SUPABASE_URL}/storage/v1/object/creator-assets/{storage_path}"
-    response = requests.get(url, headers=headers)
+def download_from_signed_url(storage_url: str) -> bytes:
+    """Download file from signed URL"""
+    response = requests.get(storage_url)
     response.raise_for_status()
-
     return response.content
 
-def extract_document_text(document_id: str, storage_path: str) -> Dict[str, Any]:
+def extract_document_text(document_id: str, storage_url: str) -> Dict[str, Any]:
     """Extract text from uploaded PDF"""
     try:
         logger.info(f"Starting text extraction for document {document_id}")
@@ -59,9 +52,9 @@ def extract_document_text(document_id: str, storage_path: str) -> Dict[str, Any]
             {"processing_status": "EXTRACTING"}
         )
 
-        # Download file from Storage
-        logger.info(f"Downloading file from {storage_path}")
-        file_data = download_from_storage(storage_path)
+        # Download file from signed URL
+        logger.info(f"Downloading file from signed URL")
+        file_data = download_from_signed_url(storage_url)
 
         # Extract text
         extracted_text = extract_text_from_pdf(file_data)

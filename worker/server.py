@@ -82,13 +82,13 @@ def extract():
     try:
         data = request.json
         document_id = data.get("documentId")
-        storage_path = data.get("storagePath")
+        storage_url = data.get("storageUrl")
 
-        if not document_id or not storage_path:
-            return jsonify({"error": "Missing documentId or storagePath"}), 400
+        if not document_id or not storage_url:
+            return jsonify({"error": "Missing documentId or storageUrl"}), 400
 
         logger.info(f"Extraction request for document {document_id}")
-        result = extract_document_text(document_id, storage_path)
+        result = extract_document_text(document_id, storage_url)
 
         status_code = 200 if result.get("success") else 500
         return jsonify(result), status_code

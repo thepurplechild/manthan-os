@@ -33,7 +33,20 @@ const extractDocumentText = inngest.createFunction(
       return data;
     });
 
-    // Step 2: Call Railway worker to extract text
+    // Step 2: Generate signed URL for Railway worker access
+    const signedUrl = await step.run('generate-signed-url', async () => {
+      const { createClient } = await import('@/lib/supabase/server');
+      const supabase = await createClient();
+
+      const { data: signedUrlData, error } = await supabase.storage
+        .from('creator-assets')
+        .createSignedUrl(document.storage_path || storagePath, 3600); // Valid for 1 hour
+
+      if (error) throw new Error(`Failed to generate signed URL: ${error.message}`);
+      return signedUrlData.signedUrl;
+    });
+
+    // Step 3: Call Railway worker to extract text
     const result = await step.run('call-railway-worker', async () => {
       const workerUrl = process.env.RAILWAY_WORKER_URL || 'https://manthan-os-production.up.railway.app';
 
@@ -45,7 +58,7 @@ const extractDocumentText = inngest.createFunction(
         },
         body: JSON.stringify({
           documentId,
-          storagePath: document.storage_path || storagePath
+          storageUrl: signedUrl
         })
       });
 
