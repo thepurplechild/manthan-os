@@ -47,7 +47,7 @@ export function UploadImageAsset({ documentId, onUploadComplete }: UploadImageAs
       const storagePath = `${documentId}/references/${filename}`;
 
       // Upload to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('creator-assets')
         .upload(storagePath, file, {
           cacheControl: '3600',

@@ -85,10 +85,10 @@ export async function generateImage(params: BharatDiffusionParams): Promise<Gene
       errorMessage = error.message;
     } else if (typeof error === 'object' && error !== null) {
       if ('message' in error) {
-        errorMessage = String((error as any).message);
+        errorMessage = String((error as Record<string, unknown>).message);
       }
       if ('response' in error) {
-        console.error('API Error Response:', (error as any).response);
+        console.error('API Error Response:', (error as Record<string, unknown>).response);
       }
     }
 
