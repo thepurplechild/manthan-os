@@ -130,9 +130,7 @@ export async function generateConcept(params: GenerateConceptParams) {
 
     if (uploadError) {
       console.error('❌ Storage upload error:', uploadError);
-      console.error('❌ Error code:', uploadError.error);
       console.error('❌ Error message:', uploadError.message);
-      console.error('❌ Error statusCode:', uploadError.statusCode);
       return { success: false, error: `Failed to save image: ${uploadError.message}` };
     }
 
