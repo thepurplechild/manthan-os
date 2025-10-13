@@ -78,6 +78,7 @@ export async function uploadDocument(formData: FormData) {
   }
 
   // Send Inngest event for processing
+  console.log('🔥 About to send Inngest event for document:', document.id);
   try {
     await inngest.send({
       name: 'document.uploaded',
@@ -89,6 +90,7 @@ export async function uploadDocument(formData: FormData) {
         fileSize: file.size
       },
     });
+    console.log('✅ Inngest event sent successfully');
     console.log('✅ Inngest event sent:', document.id);
   } catch (inngestError) {
     console.error('❌ Inngest event failed:', inngestError);
