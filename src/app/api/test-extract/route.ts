@@ -46,10 +46,13 @@ export async function GET(request: Request) {
       worker_response: result,
     });
 
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
     return Response.json({
-      error: error.message,
-      stack: error.stack
+      error: errorMessage,
+      stack: errorStack
     }, { status: 500 });
   }
 }
