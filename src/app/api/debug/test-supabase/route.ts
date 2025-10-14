@@ -6,7 +6,7 @@ export async function GET() {
     const supabase = await createClient();
 
     // Test basic connection
-    const { data: healthCheck, error: healthError } = await supabase
+    const { error: healthError } = await supabase
       .from('documents')
       .select('count')
       .limit(1);
@@ -51,10 +51,11 @@ export async function GET() {
       timestamp: new Date().toISOString()
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({
       success: false,
-      error: error.message,
+      error: errorMessage,
       details: 'Unexpected error during Supabase test'
     }, { status: 500 });
   }

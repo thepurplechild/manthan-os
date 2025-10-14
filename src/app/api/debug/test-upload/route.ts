@@ -21,7 +21,7 @@ export async function GET() {
     const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
 
     // Test if documents bucket exists and is accessible
-    let documentsbucketInfo = null;
+    let documentsBucketInfo = null;
     if (!bucketsError && buckets) {
       const documentsBucket = buckets.find(bucket => bucket.name === 'documents');
       if (documentsBucket) {
@@ -30,7 +30,7 @@ export async function GET() {
           .from('documents')
           .list(user.id, { limit: 1 });
 
-        documentsucketInfo = {
+        documentsBucketInfo = {
           exists: true,
           accessible: !filesError,
           file_count_sample: files?.length || 0,
@@ -91,10 +91,11 @@ export async function GET() {
       timestamp: new Date().toISOString()
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({
       success: false,
-      error: error.message,
+      error: errorMessage,
       details: 'Unexpected error during upload flow test'
     }, { status: 500 });
   }

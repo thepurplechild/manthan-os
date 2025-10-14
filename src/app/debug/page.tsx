@@ -2,11 +2,19 @@
 
 import { useState } from 'react';
 
+interface TestResult {
+  success: boolean;
+  status?: number;
+  data?: Record<string, unknown>;
+  error?: string;
+  timestamp: string;
+}
+
 export default function DebugPage() {
-  const [results, setResults] = useState<any>({});
+  const [results, setResults] = useState<Record<string, TestResult>>({});
   const [loading, setLoading] = useState<string | null>(null);
 
-  const testComponent = async (component: string, endpoint: string, body?: any) => {
+  const testComponent = async (component: string, endpoint: string, body?: unknown) => {
     setLoading(component);
     try {
       const response = await fetch(endpoint, {
@@ -16,7 +24,7 @@ export default function DebugPage() {
       });
 
       const data = await response.json();
-      setResults((prev: any) => ({
+      setResults((prev: Record<string, TestResult>) => ({
         ...prev,
         [component]: {
           success: response.ok,
@@ -25,12 +33,13 @@ export default function DebugPage() {
           timestamp: new Date().toISOString(),
         }
       }));
-    } catch (error: any) {
-      setResults((prev: any) => ({
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setResults((prev: Record<string, TestResult>) => ({
         ...prev,
         [component]: {
           success: false,
-          error: error.message,
+          error: errorMessage,
           timestamp: new Date().toISOString(),
         }
       }));
@@ -216,7 +225,8 @@ export default function DebugPage() {
           >
             {loading === 'recentDocs' ? 'Loading...' : 'Load Recent Documents'}
           </button>
-          {results.recentDocs && results.recentDocs.data?.documents && (
+          {results.recentDocs && results.recentDocs.data &&
+           (results.recentDocs.data as Record<string, unknown>).documents ? (
             <div className="mt-4 overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-100">
@@ -229,10 +239,10 @@ export default function DebugPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {results.recentDocs.data.documents.map((doc: any) => (
-                    <tr key={doc.id} className="border-b">
-                      <td className="p-2 font-mono text-xs">{doc.id.substring(0, 8)}...</td>
-                      <td className="p-2">{doc.title}</td>
+                  {((results.recentDocs.data as Record<string, unknown>).documents as Record<string, unknown>[]).map((doc: Record<string, unknown>) => (
+                    <tr key={doc.id as string} className="border-b">
+                      <td className="p-2 font-mono text-xs">{(doc.id as string).substring(0, 8)}...</td>
+                      <td className="p-2">{doc.title as string}</td>
                       <td className="p-2">
                         <span className={`px-2 py-1 rounded text-xs ${
                           doc.processing_status === 'READY' ? 'bg-green-100 text-green-800' :
@@ -240,17 +250,17 @@ export default function DebugPage() {
                           doc.processing_status === 'EXTRACTION_FAILED' ? 'bg-red-100 text-red-800' :
                           'bg-gray-100 text-gray-800'
                         }`}>
-                          {doc.processing_status}
+                          {doc.processing_status as string}
                         </span>
                       </td>
                       <td className="p-2">{doc.has_text ? '✅' : '❌'}</td>
-                      <td className="p-2">{doc.embedding_count || 0} chunks</td>
+                      <td className="p-2">{(doc.embedding_count as number) || 0} chunks</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          )}
+          ) : null}
         </div>
 
       </div>
