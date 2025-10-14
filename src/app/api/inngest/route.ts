@@ -23,16 +23,24 @@ const extractDocumentText = inngest.createFunction(
       const { createClient } = await import('@/lib/supabase/server');
       const supabase = await createClient();
 
+      console.log('Fetching document:', documentId);
+
       const { data, error } = await supabase
         .from('documents')
-        .select('id, storage_url, storage_path, title')
+        .select('id, title, storage_url, storage_path, processing_status')
         .eq('id', documentId)
-        .single();
+        .maybeSingle(); // Use maybeSingle() instead of single()
 
-      if (error || !data) {
-        throw new Error(`Document fetch failed: ${error?.message || 'Not found'}`);
+      if (error) {
+        console.error('Supabase error:', error);
+        throw new Error(`Database error: ${error.message}`);
       }
 
+      if (!data) {
+        throw new Error(`Document not found: ${documentId}`);
+      }
+
+      console.log('Document fetched successfully:', data.id);
       console.log('📄 Document fetched:', data.title, data.id);
       console.log('📍 Storage URL:', data.storage_url);
       return data;
