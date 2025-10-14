@@ -3,6 +3,7 @@ import sys
 import logging
 import requests
 from typing import Dict, Any
+from inngest import Inngest
 
 logging.basicConfig(
     level=logging.INFO,
@@ -10,6 +11,9 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger(__name__)
+
+# Initialize Inngest client
+inngest_client = Inngest(app_id="manthan-os")
 
 from processors.pdf_extractor import extract_text_from_pdf
 from processors.embeddings import generate_embeddings
@@ -79,33 +83,20 @@ def extract_document_text(document_id: str, storage_url: str) -> Dict[str, Any]:
 
         # Send document.extracted event to Inngest
         try:
-            inngest_url = os.getenv('INNGEST_EVENT_URL', 'https://manthan-os-thepurplechilds-projects.vercel.app/api/inngest')
+            logger.info(f"Sending document.extracted event via Inngest client: {document_id}")
 
-            event_payload = {
+            inngest_client.send({
                 "name": "document.extracted",
                 "data": {
                     "documentId": document_id,
                     "textLength": len(extracted_text)
                 }
-            }
+            })
 
-            logger.info(f"Sending document.extracted event to Inngest: {document_id}")
-
-            response = requests.post(
-                inngest_url,
-                json=event_payload,
-                headers={'Content-Type': 'application/json'},
-                timeout=10
-            )
-
-            if response.status_code in [200, 201, 204]:
-                logger.info(f"✅ Successfully sent document.extracted event for {document_id}")
-            else:
-                logger.warning(f"⚠️ Inngest event returned {response.status_code}: {response.text}")
+            logger.info(f"✅ Successfully sent document.extracted event for {document_id}")
 
         except Exception as e:
             logger.error(f"Failed to send Inngest event (non-fatal): {str(e)}")
-            # Don't fail the extraction if event sending fails
 
         return {
             "success": True,
