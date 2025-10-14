@@ -1,5 +1,6 @@
 import { Inngest } from 'inngest';
 import { serve } from 'inngest/next';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 // Initialize Inngest client
 export const inngest = new Inngest({
@@ -20,29 +21,31 @@ const extractDocumentText = inngest.createFunction(
 
     // Fetch document with its public storage_url
     const document = await step.run('fetch-document', async () => {
-      const { createClient } = await import('@/lib/supabase/server');
-      const supabase = await createClient();
+      // Use direct Supabase client (works in serverless context)
+      const supabase = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
 
-      console.log('Fetching document:', documentId);
+      console.log('🔍 Fetching document:', documentId);
 
       const { data, error } = await supabase
         .from('documents')
         .select('id, title, storage_url, storage_path, processing_status')
         .eq('id', documentId)
-        .maybeSingle(); // Use maybeSingle() instead of single()
+        .maybeSingle();
 
       if (error) {
-        console.error('Supabase error:', error);
+        console.error('❌ Supabase query error:', error);
         throw new Error(`Database error: ${error.message}`);
       }
 
       if (!data) {
+        console.error('❌ No document found with ID:', documentId);
         throw new Error(`Document not found: ${documentId}`);
       }
 
-      console.log('Document fetched successfully:', data.id);
-      console.log('📄 Document fetched:', data.title, data.id);
-      console.log('📍 Storage URL:', data.storage_url);
+      console.log('✅ Document found:', data.title);
       return data;
     });
 
@@ -91,8 +94,11 @@ const generateEmbeddings = inngest.createFunction(
 
     // Step 1: Verify document has extracted text
     await step.run('verify-extracted-text', async () => {
-      const { createClient } = await import('@/lib/supabase/server');
-      const supabase = await createClient();
+      // Use direct Supabase client (works in serverless context)
+      const supabase = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
 
       const { data, error } = await supabase
         .from('documents')
