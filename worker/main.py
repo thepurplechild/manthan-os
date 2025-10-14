@@ -3,7 +3,6 @@ import sys
 import logging
 import requests
 from typing import Dict, Any
-from inngest import Inngest
 
 logging.basicConfig(
     level=logging.INFO,
@@ -12,8 +11,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize Inngest client
-inngest_client = Inngest(app_id="manthan-os")
 
 from processors.pdf_extractor import extract_text_from_pdf
 from processors.embeddings import generate_embeddings
@@ -81,19 +78,38 @@ def extract_document_text(document_id: str, storage_url: str) -> Dict[str, Any]:
             }
         )
 
-        # Send document.extracted event to Inngest
+        # After successful extraction, send event to Inngest Cloud
         try:
-            logger.info(f"Sending document.extracted event via Inngest client: {document_id}")
+            inngest_event_key = os.getenv('INNGEST_EVENT_KEY')
 
-            inngest_client.send({
-                "name": "document.extracted",
-                "data": {
-                    "documentId": document_id,
-                    "textLength": len(extracted_text)
+            if not inngest_event_key:
+                logger.warning("INNGEST_EVENT_KEY not set - cannot send event")
+            else:
+                event_payload = {
+                    "name": "document.extracted",
+                    "data": {
+                        "documentId": document_id,
+                        "textLength": len(extracted_text)
+                    }
                 }
-            })
 
-            logger.info(f"✅ Successfully sent document.extracted event for {document_id}")
+                logger.info(f"Sending document.extracted event to Inngest Cloud: {document_id}")
+
+                # Send to Inngest Cloud with proper authentication
+                response = requests.post(
+                    'https://inn.gs/e/manthan-os',
+                    json=event_payload,
+                    headers={
+                        'Authorization': f'Bearer {inngest_event_key}',
+                        'Content-Type': 'application/json'
+                    },
+                    timeout=10
+                )
+
+                if response.status_code in [200, 201, 204]:
+                    logger.info(f"✅ Successfully sent document.extracted event for {document_id}")
+                else:
+                    logger.warning(f"⚠️ Inngest Cloud returned {response.status_code}: {response.text}")
 
         except Exception as e:
             logger.error(f"Failed to send Inngest event (non-fatal): {str(e)}")
