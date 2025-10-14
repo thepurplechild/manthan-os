@@ -70,6 +70,36 @@ def extract_document_text(document_id: str, storage_url: str) -> Dict[str, Any]:
             }
         )
 
+        # Send document.extracted event to Inngest
+        try:
+            inngest_url = os.getenv('INNGEST_EVENT_URL', 'https://manthan-os-thepurplechilds-projects.vercel.app/api/inngest')
+
+            event_payload = {
+                "name": "document.extracted",
+                "data": {
+                    "documentId": document_id,
+                    "textLength": len(extracted_text)
+                }
+            }
+
+            logger.info(f"Sending document.extracted event to Inngest: {document_id}")
+
+            response = requests.post(
+                inngest_url,
+                json=event_payload,
+                headers={'Content-Type': 'application/json'},
+                timeout=10
+            )
+
+            if response.status_code in [200, 201, 204]:
+                logger.info(f"✅ Successfully sent document.extracted event for {document_id}")
+            else:
+                logger.warning(f"⚠️ Inngest event returned {response.status_code}: {response.text}")
+
+        except Exception as e:
+            logger.error(f"Failed to send Inngest event (non-fatal): {str(e)}")
+            # Don't fail the extraction if event sending fails
+
         return {
             "success": True,
             "textLength": len(extracted_text),
