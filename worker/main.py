@@ -43,6 +43,13 @@ def download_from_signed_url(storage_url: str) -> bytes:
 def extract_document_text(document_id: str, storage_url: str) -> Dict[str, Any]:
     """Extract text from uploaded PDF"""
     try:
+        # Trim any whitespace from document_id
+        document_id = document_id.strip() if document_id else None
+
+        if not document_id:
+            raise ValueError('Document ID is required')
+
+        logger.info(f"Processing document: {document_id}")
         logger.info(f"Starting text extraction for document {document_id}")
 
         # Update status to EXTRACTING
@@ -127,6 +134,13 @@ def extract_document_text(document_id: str, storage_url: str) -> Dict[str, Any]:
 def generate_document_embeddings(document_id: str) -> Dict[str, Any]:
     """Generate embeddings for document chunks"""
     try:
+        # Trim any whitespace from document_id
+        document_id = document_id.strip() if document_id else None
+
+        if not document_id:
+            raise ValueError('Document ID is required')
+
+        logger.info(f"Processing document: {document_id}")
         logger.info(f"Starting embedding generation for document {document_id}")
 
         # Update status
