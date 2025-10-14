@@ -78,12 +78,14 @@ def extract_document_text(document_id: str, storage_url: str) -> Dict[str, Any]:
             }
         )
 
-        # After successful extraction, send event to Inngest Cloud
+        # After successful extraction, send event to Vercel Inngest endpoint
         try:
-            inngest_event_key = os.getenv('INNGEST_EVENT_KEY')
+            # Get Vercel URL from environment (same as for /extract calls)
+            vercel_url = os.getenv('INNGEST_EVENT_URL', 'https://manthan-os-thepurplechilds-projects.vercel.app')
+            worker_secret = os.getenv('WORKER_SECRET')
 
-            if not inngest_event_key:
-                logger.warning("INNGEST_EVENT_KEY not set - cannot send event")
+            if not worker_secret:
+                logger.warning("WORKER_SECRET not set - cannot send event")
             else:
                 event_payload = {
                     "name": "document.extracted",
@@ -93,14 +95,14 @@ def extract_document_text(document_id: str, storage_url: str) -> Dict[str, Any]:
                     }
                 }
 
-                logger.info(f"Sending document.extracted event to Inngest Cloud: {document_id}")
+                logger.info(f"📤 Sending document.extracted event to Vercel Inngest endpoint: {document_id}")
 
-                # Send to Inngest Cloud with proper authentication
+                # Send to YOUR Vercel Inngest endpoint (not Inngest Cloud)
                 response = requests.post(
-                    'https://inn.gs/e/manthan-os',
+                    f"{vercel_url}/api/inngest",
                     json=event_payload,
                     headers={
-                        'Authorization': f'Bearer {inngest_event_key}',
+                        'Authorization': f'Bearer {worker_secret}',
                         'Content-Type': 'application/json'
                     },
                     timeout=10
@@ -109,7 +111,7 @@ def extract_document_text(document_id: str, storage_url: str) -> Dict[str, Any]:
                 if response.status_code in [200, 201, 204]:
                     logger.info(f"✅ Successfully sent document.extracted event for {document_id}")
                 else:
-                    logger.warning(f"⚠️ Inngest Cloud returned {response.status_code}: {response.text}")
+                    logger.warning(f"⚠️ Event sending returned {response.status_code}: {response.text}")
 
         except Exception as e:
             logger.error(f"Failed to send Inngest event (non-fatal): {str(e)}")
