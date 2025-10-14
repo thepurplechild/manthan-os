@@ -46,10 +46,13 @@ const extractDocumentText = inngest.createFunction(
 
       const response = await fetch(`${workerUrl}/extract`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.WORKER_SECRET}`, // Add auth
+        },
         body: JSON.stringify({
-          document_id: documentId,
-          storage_url: document.storage_url, // Use existing public URL
+          documentId: documentId,        // Change to camelCase
+          storageUrl: document.storage_url, // Change to camelCase
         }),
       });
 

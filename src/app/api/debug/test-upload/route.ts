@@ -20,14 +20,14 @@ export async function GET() {
     // Test storage bucket access
     const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
 
-    // Test if documents bucket exists and is accessible
+    // Test if creator-assets bucket exists and is accessible
     let documentsBucketInfo = null;
     if (!bucketsError && buckets) {
-      const documentsBucket = buckets.find(bucket => bucket.name === 'documents');
+      const documentsBucket = buckets.find(bucket => bucket.name === 'creator-assets');
       if (documentsBucket) {
         // Test listing files in the bucket (just to verify access)
         const { data: files, error: filesError } = await supabase.storage
-          .from('documents')
+          .from('creator-assets')
           .list(user.id, { limit: 1 });
 
         documentsBucketInfo = {
@@ -40,7 +40,7 @@ export async function GET() {
         documentsBucketInfo = {
           exists: false,
           accessible: false,
-          error: 'Documents bucket not found'
+          error: 'Creator-assets bucket not found'
         };
       }
     }

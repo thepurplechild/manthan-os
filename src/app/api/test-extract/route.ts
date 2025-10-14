@@ -26,10 +26,13 @@ export async function GET(request: Request) {
 
     const response = await fetch(`${workerUrl}/extract`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.WORKER_SECRET}`
+      },
       body: JSON.stringify({
-        document_id: documentId,
-        storage_url: document.storage_url,
+        documentId: documentId,
+        storageUrl: document.storage_url,
       }),
     });
 
