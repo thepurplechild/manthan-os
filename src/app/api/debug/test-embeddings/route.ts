@@ -111,11 +111,12 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString()
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return NextResponse.json({
       success: false,
-      error: error.message,
-      details: 'Unexpected error during embeddings test'
+      error: errorMessage,
+      details: error instanceof Error ? error.stack : undefined
     }, { status: 500 });
   }
 }

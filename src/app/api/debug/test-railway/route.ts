@@ -58,11 +58,12 @@ export async function GET() {
       timestamp: new Date().toISOString(),
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return NextResponse.json({
       success: false,
-      error: error.message,
-      details: 'Failed to connect to Railway worker',
+      error: errorMessage,
+      details: error instanceof Error ? error.stack : undefined,
       worker_url: process.env.RAILWAY_WORKER_URL || 'https://manthan-os-production.up.railway.app',
       timestamp: new Date().toISOString(),
     }, { status: 500 });
