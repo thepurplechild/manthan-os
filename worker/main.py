@@ -78,43 +78,6 @@ def extract_document_text(document_id: str, storage_url: str) -> Dict[str, Any]:
             }
         )
 
-        # After successful extraction, send event to Vercel Inngest endpoint
-        try:
-            # Get Vercel URL from environment (same as for /extract calls)
-            vercel_url = os.getenv('INNGEST_EVENT_URL', 'https://manthan-os-thepurplechilds-projects.vercel.app')
-            worker_secret = os.getenv('WORKER_SECRET')
-
-            if not worker_secret:
-                logger.warning("WORKER_SECRET not set - cannot send event")
-            else:
-                event_payload = {
-                    "name": "document.extracted",
-                    "data": {
-                        "documentId": document_id,
-                        "textLength": len(extracted_text)
-                    }
-                }
-
-                logger.info(f"📤 Sending document.extracted event to Vercel Inngest endpoint: {document_id}")
-
-                # Send to YOUR Vercel Inngest endpoint (not Inngest Cloud)
-                response = requests.post(
-                    f"{vercel_url}/api/inngest",
-                    json=event_payload,
-                    headers={
-                        'Authorization': f'Bearer {worker_secret}',
-                        'Content-Type': 'application/json'
-                    },
-                    timeout=10
-                )
-
-                if response.status_code in [200, 201, 204]:
-                    logger.info(f"✅ Successfully sent document.extracted event for {document_id}")
-                else:
-                    logger.warning(f"⚠️ Event sending returned {response.status_code}: {response.text}")
-
-        except Exception as e:
-            logger.error(f"Failed to send Inngest event (non-fatal): {str(e)}")
 
         return {
             "success": True,
