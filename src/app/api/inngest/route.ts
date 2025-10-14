@@ -17,7 +17,14 @@ const extractDocumentText = inngest.createFunction(
   },
   { event: 'document.uploaded' },
   async ({ event, step }) => {
-    const { documentId } = event.data;
+    // Trim whitespace from documentId
+    const documentId = event.data.documentId?.trim();
+
+    if (!documentId) {
+      throw new Error('Document ID is required');
+    }
+
+    console.log('🔍 Processing document:', documentId);
 
     // Fetch document with its public storage_url
     const document = await step.run('fetch-document', async () => {
@@ -50,35 +57,48 @@ const extractDocumentText = inngest.createFunction(
     });
 
     // Call Railway worker with public URL
-    const result = await step.run('extract-text', async () => {
-      const workerUrl = process.env.RAILWAY_WORKER_URL || 'https://manthan-os-production.up.railway.app';
+    const extractionResult = await step.run('call-railway-worker', async () => {
+      console.log('🔄 Calling Railway worker for text extraction');
 
-      console.log('🚂 Calling Railway:', `${workerUrl}/extract`);
+      const workerUrl = process.env.RAILWAY_WORKER_URL || 'https://manthan-os-production.up.railway.app';
 
       const response = await fetch(`${workerUrl}/extract`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.WORKER_SECRET}`, // Add auth
+          'Authorization': `Bearer ${process.env.WORKER_SECRET}`,
         },
         body: JSON.stringify({
-          documentId: documentId,        // Change to camelCase
-          storageUrl: document.storage_url, // Change to camelCase
+          documentId: documentId,
+          storageUrl: document.storage_url,
         }),
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Railway extraction failed:', errorText);
-        throw new Error(`Extraction failed: ${errorText}`);
+        throw new Error(`Railway worker failed: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('✅ Text extracted:', data.character_count || 'unknown', 'characters');
+      console.log('✅ Railway extraction completed');
       return data;
     });
 
-    return { success: true, ...result };
+    // NEW: Send document.extracted event after successful extraction
+    await step.run('send-extracted-event', async () => {
+      console.log('📤 Sending document.extracted event');
+
+      await inngest.send({
+        name: 'document.extracted',
+        data: {
+          documentId: documentId,
+          textLength: extractionResult.textLength || 0
+        }
+      });
+
+      console.log('✅ document.extracted event sent');
+    });
+
+    return { success: true, message: 'Text extraction completed' };
   }
 );
 
@@ -90,7 +110,14 @@ const generateEmbeddings = inngest.createFunction(
   },
   { event: 'document.extracted' },
   async ({ event, step }) => {
-    const { documentId } = event.data;
+    // Trim whitespace from documentId
+    const documentId = event.data.documentId?.trim();
+
+    if (!documentId) {
+      throw new Error('Document ID is required');
+    }
+
+    console.log('🔍 Processing document:', documentId);
 
     // Step 1: Verify document has extracted text
     await step.run('verify-extracted-text', async () => {
