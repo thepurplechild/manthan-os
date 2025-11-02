@@ -2,6 +2,32 @@ import { Inngest } from 'inngest';
 import { serve } from 'inngest/next';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
+// Validate required environment variables
+function validateEnvVars() {
+  const required = [
+    'NEXT_PUBLIC_SUPABASE_URL',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'INNGEST_EVENT_KEY',
+    'INNGEST_SIGNING_KEY',
+    'RAILWAY_WORKER_URL',
+    'WORKER_SECRET'
+  ];
+
+  const missing = required.filter(key => !process.env[key]);
+  
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+}
+
+// Validate on module load
+try {
+  validateEnvVars();
+} catch (error) {
+  console.error('❌ Environment validation failed:', error);
+  // Don't throw - allow server to start but log error
+}
+
 // Initialize Inngest client
 export const inngest = new Inngest({
   id: 'manthan-os',
@@ -28,10 +54,15 @@ const extractDocumentText = inngest.createFunction(
 
     // Fetch document with its public storage_url
     const document = await step.run('fetch-document', async () => {
+      // Validate env vars before use
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        throw new Error('Supabase configuration missing');
+      }
+
       // Use direct Supabase client (works in serverless context)
       const supabase = createSupabaseClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
       );
 
       console.log('🔍 Fetching document:', documentId);
@@ -60,7 +91,11 @@ const extractDocumentText = inngest.createFunction(
     const extractionResult = await step.run('call-railway-worker', async () => {
       console.log('🔄 Calling Railway worker for text extraction');
 
-      const workerUrl = process.env.RAILWAY_WORKER_URL || 'https://manthan-os-production.up.railway.app';
+      if (!process.env.RAILWAY_WORKER_URL || !process.env.WORKER_SECRET) {
+        throw new Error('Worker configuration missing');
+      }
+
+      const workerUrl = process.env.RAILWAY_WORKER_URL;
 
       const response = await fetch(`${workerUrl}/extract`, {
         method: 'POST',
@@ -75,7 +110,8 @@ const extractDocumentText = inngest.createFunction(
       });
 
       if (!response.ok) {
-        throw new Error(`Railway worker failed: ${response.status}`);
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`Railway worker failed: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
@@ -121,10 +157,14 @@ const generateEmbeddings = inngest.createFunction(
 
     // Step 1: Verify document has extracted text
     await step.run('verify-extracted-text', async () => {
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        throw new Error('Supabase configuration missing');
+      }
+
       // Use direct Supabase client (works in serverless context)
       const supabase = createSupabaseClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
       );
 
       const { data, error } = await supabase
@@ -141,7 +181,11 @@ const generateEmbeddings = inngest.createFunction(
 
     // Step 2: Call Railway worker to generate embeddings
     const result = await step.run('call-railway-embed', async () => {
-      const workerUrl = process.env.RAILWAY_WORKER_URL || 'https://manthan-os-production.up.railway.app';
+      if (!process.env.RAILWAY_WORKER_URL || !process.env.WORKER_SECRET) {
+        throw new Error('Worker configuration missing');
+      }
+
+      const workerUrl = process.env.RAILWAY_WORKER_URL;
 
       const response = await fetch(`${workerUrl}/embed`, {
         method: 'POST',
@@ -153,7 +197,7 @@ const generateEmbeddings = inngest.createFunction(
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
+        const errorText = await response.text().catch(() => 'Unknown error');
         throw new Error(`Embedding generation failed: ${errorText}`);
       }
 

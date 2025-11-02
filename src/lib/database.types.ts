@@ -26,6 +26,10 @@ export type AnalysisOutputType =
 
 export type AnalysisStatus = 'GENERATING' | 'GENERATED' | 'FAILED'
 
+export type UserRole = 'creator' | 'founder'
+
+export type DealStatus = 'introduced' | 'passed' | 'in_discussion' | 'deal_closed'
+
 export interface AssetMetadata {
   duration?: number;
   dimensions?: {
@@ -155,6 +159,93 @@ export interface Database {
           processing_time_ms?: number | null
           ai_model?: string
           error_message?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      profiles: {
+        Row: {
+          id: string
+          full_name: string | null
+          role: UserRole
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          full_name?: string | null
+          role?: UserRole
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          full_name?: string | null
+          role?: UserRole
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      platform_mandates: {
+        Row: {
+          id: string
+          platform_name: string
+          mandate_description: string
+          tags: string[]
+          source: string | null
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          platform_name: string
+          mandate_description: string
+          tags?: string[]
+          source?: string | null
+          created_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          platform_name?: string
+          mandate_description?: string
+          tags?: string[]
+          source?: string | null
+          created_by?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      deal_pipeline: {
+        Row: {
+          id: string
+          project_id: string
+          target_buyer_name: string
+          status: DealStatus
+          feedback_notes: string | null
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          target_buyer_name: string
+          status?: DealStatus
+          feedback_notes?: string | null
+          created_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          target_buyer_name?: string
+          status?: DealStatus
+          feedback_notes?: string | null
+          created_by?: string
           created_at?: string
           updated_at?: string
         }
