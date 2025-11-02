@@ -16,16 +16,13 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.get(name)?.value
         },
         set(name: string, value: string, options: CookieOptions) {
+          // Update request cookies
           request.cookies.set({
             name,
             value,
             ...options,
           })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
+          // Update response cookies - preserve existing cookies
           response.cookies.set({
             name,
             value,
@@ -33,16 +30,13 @@ export async function updateSession(request: NextRequest) {
           })
         },
         remove(name: string, options: CookieOptions) {
+          // Update request cookies
           request.cookies.set({
             name,
             value: '',
             ...options,
           })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
+          // Update response cookies - preserve existing cookies
           response.cookies.set({
             name,
             value: '',
@@ -61,10 +55,12 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  // Check authentication for protected routes
   if (
     !user &&
     !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/auth')
+    !request.nextUrl.pathname.startsWith('/auth') &&
+    !request.nextUrl.pathname.startsWith('/signup')
   ) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone()
@@ -72,18 +68,40 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
-  // creating a new response object with NextResponse.next() make sure to:
-  // 1. Pass the request in it, like so:
-  //    const myNewResponse = NextResponse.next({ request })
-  // 2. Copy over the cookies, like so:
-  //    myNewResponse.cookies.setAll(supabaseResponse.cookies.getAll())
-  // 3. Change the myNewResponse object to fit your needs, but avoid changing
-  //    the cookies!
-  // 4. Finally:
-  //    return myNewResponse
-  // If this is not done, you may be causing the browser and server to go out
-  // of sync and terminate the user's session prematurely!
+  // Check founder role for founder-only routes
+  if (user && request.nextUrl.pathname.startsWith('/dashboard/founder')) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile || profile.role !== 'founder') {
+      // User is not a founder, redirect to regular dashboard
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
+
+    // Add role to request headers for downstream consumption
+    response.headers.set('x-user-role', profile.role)
+  }
+
+  // Add user role to headers if user is authenticated (for all routes)
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (profile) {
+      response.headers.set('x-user-role', profile.role)
+    }
+  }
+
+  // IMPORTANT: You *must* return the response object with all cookies properly set.
+  // If redirecting, ensure cookies are preserved.
 
   return response
 }

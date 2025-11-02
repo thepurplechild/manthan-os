@@ -15,7 +15,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { query, limit = 5, threshold = 0.7 } = await request.json()
+    // Validate environment variable
+    if (!process.env.VOYAGE_API_KEY) {
+      console.error('VOYAGE_API_KEY is not configured')
+      return NextResponse.json({ error: 'Service configuration error' }, { status: 500 })
+    }
+
+    const body = await request.json()
+    const { query, limit = 5, threshold = 0.7 } = body
 
     console.log('Search parameters:', { query, limit, threshold })
 
@@ -25,17 +32,23 @@ export async function POST(request: NextRequest) {
 
     // Generate query embedding via Voyage AI
     console.log('Calling Voyage AI...')
-    const voyageResponse = await fetch('https://api.voyageai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.VOYAGE_API_KEY}`
-      },
-      body: JSON.stringify({
-        input: [query],
-        model: 'voyage-3-lite'
+    let voyageResponse: Response
+    try {
+      voyageResponse = await fetch('https://api.voyageai.com/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.VOYAGE_API_KEY}`
+        },
+        body: JSON.stringify({
+          input: [query],
+          model: 'voyage-3-lite'
+        })
       })
-    })
+    } catch (fetchError) {
+      console.error('Voyage AI fetch error:', fetchError)
+      return NextResponse.json({ error: 'Failed to connect to embedding service' }, { status: 503 })
+    }
 
     if (!voyageResponse.ok) {
       const error = await voyageResponse.text()
@@ -43,14 +56,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to generate embedding' }, { status: 500 })
     }
 
-    const voyageData = await voyageResponse.json()
-    const queryEmbedding = voyageData.data[0].embedding
+    let voyageData: any
+    try {
+      voyageData = await voyageResponse.json()
+    } catch (parseError) {
+      console.error('Failed to parse Voyage AI response:', parseError)
+      return NextResponse.json({ error: 'Invalid response from embedding service' }, { status: 500 })
+    }
 
-    console.log('Embedding generated, dimensions:', queryEmbedding?.length)
+    const queryEmbedding = voyageData?.data?.[0]?.embedding
+    if (!queryEmbedding || !Array.isArray(queryEmbedding)) {
+      console.error('Invalid embedding format:', voyageData)
+      return NextResponse.json({ error: 'Invalid embedding format' }, { status: 500 })
+    }
+
+    console.log('Embedding generated, dimensions:', queryEmbedding.length)
 
     // Perform vector similarity search
     console.log('Calling search_documents with:', {
-      embedding_dims: queryEmbedding?.length,
+      embedding_dims: queryEmbedding.length,
       match_threshold: threshold,
       match_count: limit,
       filter_user_id: user.id
@@ -84,8 +108,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Search endpoint error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error'
     return NextResponse.json({
-      error: 'Internal server error'
+      error: errorMessage
     }, { status: 500 })
   }
 }

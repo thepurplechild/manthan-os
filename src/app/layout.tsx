@@ -3,6 +3,15 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 
+// Validate environment variables on server startup
+if (typeof window === 'undefined') {
+  import('@/lib/utils/envValidation').then(({ validateAndLogEnvVars }) => {
+    validateAndLogEnvVars();
+  }).catch(() => {
+    // Ignore errors during import
+  });
+}
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
