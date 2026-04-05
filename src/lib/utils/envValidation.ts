@@ -25,8 +25,8 @@ const requiredEnvVars = {
 } as const;
 
 const optionalEnvVars = {
-  // OpenAI (for processing)
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+  // Anthropic (for processing)
+  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
   
   // Segmind/Pixelbin (for image generation)
   SEGMIND_API_KEY: process.env.SEGMIND_API_KEY,
@@ -56,8 +56,8 @@ export function validateEnvVars(): EnvValidationResult {
   });
 
   // Check optional vars (warnings only)
-  if (!optionalEnvVars.OPENAI_API_KEY) {
-    warnings.push('OPENAI_API_KEY is missing - document processing will fail');
+  if (!optionalEnvVars.ANTHROPIC_API_KEY) {
+    warnings.push('ANTHROPIC_API_KEY is missing - document processing will fail');
   }
 
   return {

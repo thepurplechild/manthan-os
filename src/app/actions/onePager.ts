@@ -1,13 +1,13 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 import { getCharacterBible } from './characterBible';
 import { getSynopsis } from './synopsis';
 import { getLoglines } from './loglines';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
 interface OnePager {
@@ -180,26 +180,23 @@ Return ONLY valid JSON with NO markdown:
   "generatedAt": "${new Date().toISOString()}"
 }`;
 
-    // 6. Call OpenAI
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    // 6. Call Claude
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2500,
+      system: 'You are an expert at creating professional pitch documents for film and TV. You understand industry standards, marketing, and what executives want to see. Always return valid JSON.',
       messages: [
-        {
-          role: 'system',
-          content: 'You are an expert at creating professional pitch documents for film and TV. You understand industry standards, marketing, and what executives want to see. Always return valid JSON.',
-        },
         {
           role: 'user',
           content: prompt,
         },
       ],
-      temperature: 0.7,
-      max_tokens: 2500,
     });
 
-    const rawContent = response.choices[0].message.content;
+    const textBlock = response.content.find(block => block.type === 'text');
+    const rawContent = textBlock && 'text' in textBlock ? textBlock.text : null;
     if (!rawContent) {
-      throw new Error('Empty response from OpenAI');
+      throw new Error('Empty response from Claude');
     }
 
     // 7. Parse response
@@ -227,7 +224,7 @@ Return ONLY valid JSON with NO markdown:
         content: onePager,
         status: 'GENERATED',
         processing_time_ms: processingTime,
-        ai_model: 'gpt-4o-mini',
+        ai_model: 'claude-sonnet-4-20250514',
       }, {
         onConflict: 'document_id,output_type,version'
       });

@@ -28,7 +28,7 @@ cd worker && SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... VOYAGE_API_KEY=... W
 
 ### Environment Variables
 
-The app requires a `.env.local` file (gitignored). In development mode, missing required env vars produce console warnings but do not crash the server. Required vars for full functionality: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VOYAGE_API_KEY`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `RAILWAY_WORKER_URL`, `WORKER_SECRET`. Optional: `OPENAI_API_KEY`, `SEGMIND_API_KEY`, `PIXELBIN_API_KEY`, `PIXELBIN_ACCESS_TOKEN`, `PIXELBIN_ORG_ID`.
+The app requires a `.env.local` file (gitignored). In development mode, missing required env vars produce console warnings but do not crash the server. Required vars for full functionality: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VOYAGE_API_KEY`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `RAILWAY_WORKER_URL`, `WORKER_SECRET`. Optional: `ANTHROPIC_API_KEY`, `SEGMIND_API_KEY`, `PIXELBIN_API_KEY`, `PIXELBIN_ACCESS_TOKEN`, `PIXELBIN_ORG_ID`.
 
 ### Key Gotchas
 
