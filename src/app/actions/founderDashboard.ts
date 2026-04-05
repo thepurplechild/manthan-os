@@ -6,7 +6,6 @@ import type { Project } from '@/lib/types/projects'
 import type { Database } from '@/lib/database.types'
 
 type DealPipeline = Database['public']['Tables']['deal_pipeline']['Row']
-type PlatformMandate = Database['public']['Tables']['platform_mandates']['Row']
 
 export interface FounderDashboardData {
   totalProjects: number
@@ -93,7 +92,7 @@ export async function getFounderDashboardData(): Promise<FounderDashboardData> {
     : null
 
   // Format recent projects with owner name
-  const recentProjects = (projects || []).map((project: any) => ({
+  const recentProjects = (projects || []).map((project: Project & { owner: { full_name: string | null } | null }) => ({
     ...project,
     owner_name: project.owner?.full_name || null,
   })) as Array<Project & { owner_name: string | null }>

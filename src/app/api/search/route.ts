@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to generate embedding' }, { status: 500 })
     }
 
-    let voyageData: any
+    let voyageData: { data?: Array<{ embedding?: number[] }> }
     try {
       voyageData = await voyageResponse.json()
     } catch (parseError) {
