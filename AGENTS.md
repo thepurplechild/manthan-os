@@ -36,3 +36,6 @@ The app requires a `.env.local` file (gitignored). In development mode, missing 
 - Python worker dependencies install to user site-packages (`~/.local/`); `flask` and `gunicorn` binaries land in `~/.local/bin/` which may not be on PATH.
 - The app uses Supabase for auth, so most dashboard pages redirect to `/login` without valid Supabase credentials.
 - Inngest dev server (`npx inngest-cli dev`) is needed for async document processing pipelines but is not required for basic app startup.
+- **Supabase URL must match the JWT project ref.** The correct URL can be derived from the anon/service-role key's JWT payload (`ref` field → `https://<ref>.supabase.co`). If `NEXT_PUBLIC_SUPABASE_URL` doesn't resolve, decode the JWT to find the real project ref.
+- **Email confirmation is required** in the Supabase project (`mailer_autoconfirm: false`). To create a pre-confirmed test user, use the admin API: `curl -X POST "$SUPABASE_URL/auth/v1/admin/users" -H "Authorization: Bearer $SERVICE_ROLE_KEY" -d '{"email":"...","password":"...","email_confirm":true}'`.
+- The `documents` table may need migrations applied — if the Documents page shows a schema cache error, the DB migrations in `db/migrations/` haven't been run against the Supabase project.
