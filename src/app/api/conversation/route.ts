@@ -102,8 +102,12 @@ export async function POST(request: NextRequest) {
     if (!apiKey) {
       console.error('conversation api: missing ANTHROPIC_API_KEY')
       return NextResponse.json(
-        { ready: false, question: SAFE_FALLBACK_QUESTION },
-        { status: 200 }
+        {
+          ready: false,
+          question: SAFE_FALLBACK_QUESTION,
+          error: 'ANTHROPIC_API_KEY is missing on server environment',
+        },
+        { status: 500 }
       )
     }
 
@@ -133,14 +137,25 @@ export async function POST(request: NextRequest) {
     console.log('conversation api raw Anthropic response:', rawResponseText)
 
     if (!response.ok) {
+      let upstreamErrorMessage = 'Conversation model request failed'
+      try {
+        const parsed = JSON.parse(rawResponseText) as { error?: { message?: string } }
+        upstreamErrorMessage = parsed.error?.message || upstreamErrorMessage
+      } catch {
+        upstreamErrorMessage = rawResponseText || upstreamErrorMessage
+      }
       console.error('conversation api non-200 response:', {
         status: response.status,
         statusText: response.statusText,
         body: rawResponseText,
       })
       return NextResponse.json(
-        { ready: false, question: SAFE_FALLBACK_QUESTION },
-        { status: 200 }
+        {
+          ready: false,
+          question: SAFE_FALLBACK_QUESTION,
+          error: upstreamErrorMessage,
+        },
+        { status: 502 }
       )
     }
 
@@ -153,8 +168,12 @@ export async function POST(request: NextRequest) {
         rawResponseText,
       })
       return NextResponse.json(
-        { ready: false, question: SAFE_FALLBACK_QUESTION },
-        { status: 200 }
+        {
+          ready: false,
+          question: SAFE_FALLBACK_QUESTION,
+          error: 'Anthropic response was not valid JSON',
+        },
+        { status: 502 }
       )
     }
 
@@ -166,8 +185,12 @@ export async function POST(request: NextRequest) {
 
     if (!rawText) {
       return NextResponse.json(
-        { ready: false, question: SAFE_FALLBACK_QUESTION },
-        { status: 200 }
+        {
+          ready: false,
+          question: SAFE_FALLBACK_QUESTION,
+          error: 'Anthropic response text was empty',
+        },
+        { status: 502 }
       )
     }
 
@@ -190,15 +213,24 @@ export async function POST(request: NextRequest) {
         rawText,
       })
       return NextResponse.json(
-        { ready: false, question: SAFE_FALLBACK_QUESTION },
-        { status: 200 }
+        {
+          ready: false,
+          question: SAFE_FALLBACK_QUESTION,
+          error: 'Model output was not valid JSON for conversation schema',
+        },
+        { status: 502 }
       )
     }
   } catch (error) {
     console.error('conversation api unexpected error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown server error'
     return NextResponse.json(
-      { ready: false, question: SAFE_FALLBACK_QUESTION },
-      { status: 200 }
+      {
+        ready: false,
+        question: SAFE_FALLBACK_QUESTION,
+        error: errorMessage,
+      },
+      { status: 500 }
     )
   }
 }

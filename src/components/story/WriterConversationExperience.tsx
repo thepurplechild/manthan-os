@@ -345,13 +345,19 @@ export function WriterConversationExperience() {
         })
 
         if (!response.ok) {
-          const errorText = await response.text().catch(() => 'Unable to read API error body')
+          let errorText = 'Unable to read API error body'
+          try {
+            const errorPayload = (await response.json()) as { error?: string }
+            errorText = errorPayload.error || errorText
+          } catch {
+            // fallback handled by default errorText
+          }
           console.error('requestTurnWithRetry /api/conversation non-200:', {
             status: response.status,
             statusText: response.statusText,
             errorText,
           })
-          throw new Error(`Conversation request failed (${response.status})`)
+          throw new Error(`Conversation request failed (${response.status}): ${errorText}`)
         }
 
         const payload = (await response.json()) as {
@@ -360,6 +366,11 @@ export function WriterConversationExperience() {
           summary?: string
           error?: string
         }
+
+        if (payload.error) {
+          console.error('requestTurnWithRetry /api/conversation payload error:', payload.error)
+        }
+
         if (typeof payload.ready !== 'boolean') {
           console.error('requestTurnWithRetry invalid payload:', payload)
           throw new Error('Invalid conversation response payload')
