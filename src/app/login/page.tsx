@@ -25,8 +25,8 @@ export default function LoginPage() {
   }, [])
 
   const errorMessage =
-    errorParam === 'invalid_credentials'
-      ? 'Invalid email or password. Please try again.'
+    errorParam
+      ? decodeURIComponent(errorParam)
       : null
 
   const infoMessage =

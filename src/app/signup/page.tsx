@@ -25,8 +25,8 @@ export default function SignupPage() {
   }, [])
 
   const errorMessage =
-    errorParam === 'signup_failed'
-      ? 'Could not create your account. Please try again.'
+    errorParam
+      ? decodeURIComponent(errorParam)
       : null
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {

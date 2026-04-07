@@ -15,7 +15,8 @@ export async function login(formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword(data)
 
   if (error) {
-    redirect('/login?error=invalid_credentials')
+    const encoded = encodeURIComponent(error.message || 'invalid_credentials')
+    redirect(`/login?error=${encoded}`)
   }
 
   revalidatePath('/', 'layout')
@@ -33,7 +34,8 @@ export async function signup(formData: FormData) {
   const { data: signUpData, error } = await supabase.auth.signUp(data)
 
   if (error) {
-    redirect('/signup?error=signup_failed')
+    const encoded = encodeURIComponent(error.message || 'signup_failed')
+    redirect(`/signup?error=${encoded}`)
   }
 
   // If email confirmation is enabled, user may not get a session immediately.
