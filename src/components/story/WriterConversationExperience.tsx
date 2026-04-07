@@ -322,25 +322,23 @@ export function WriterConversationExperience() {
   }
 
   const requestTurnWithRetry = async (
-    updatedMessages: Message[],
-    combinedMaterial: string
+    conversationHistory: Message[],
+    initialInput: string
   ): Promise<{ ready: boolean; question?: string; summary?: string }> => {
     let lastError: unknown
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         console.log('requestTurnWithRetry calling /api/conversation:', {
           attempt: attempt + 1,
-          messagesCount: updatedMessages.length,
-          materialLength: combinedMaterial.length,
+          messagesCount: conversationHistory.length,
+          materialLength: initialInput.length,
         })
-        const knownDimensions = inferKnownDimensions(updatedMessages, outputs)
         const response = await fetch('/api/conversation', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages: updatedMessages,
-            storyMaterial: combinedMaterial,
-            knownDimensions,
+            messages: conversationHistory,
+            storyMaterial: initialInput,
           }),
         })
 
