@@ -104,10 +104,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(parsed)
 
   } catch (error) {
-    if (error && typeof error === 'object' && 'status' in error) {
-      const typed = error as { status?: number; message?: string }
-      console.error('Anthropic status:', typed.status, typed.message || '')
-    }
     console.error('Conversation API error:', 
       error instanceof Error ? error.message : error)
     return NextResponse.json({ 
