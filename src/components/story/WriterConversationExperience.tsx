@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Copy, Sparkles, Upload } from 'lucide-react'
-import { createConversationTurn, saveStoryProject, type Message, type GeneratedOutputs } from '@/app/actions/conversation'
+import { saveStoryProject, type Message, type GeneratedOutputs } from '@/app/actions/conversation'
 import { generateLoglines } from '@/app/actions/loglines'
 import { generateSynopsis } from '@/app/actions/synopsis'
 import { generateCharacterBible } from '@/app/actions/characterBible'
@@ -89,6 +89,14 @@ export function WriterConversationExperience() {
     const complete = fields.filter((f) => Boolean(knownDimensions[f])).length
     return { complete, total: fields.length, percent: Math.round((complete / fields.length) * 100) }
   }, [knownDimensions])
+
+  const buildConversationErrorMessage = (error: unknown) => {
+    if (process.env.NODE_ENV === 'development') {
+      if (error instanceof Error) return `Something went wrong on our end. Let's try that again. (${error.message})`
+      return `Something went wrong on our end. Let's try that again. (${String(error)})`
+    }
+    return "Something went wrong on our end. Let's try that again."
+  }
 
   const uploadFilesAndReturnIds = async (files: File[]) => {
     if (files.length === 0) return []
@@ -320,16 +328,47 @@ export function WriterConversationExperience() {
     let lastError: unknown
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        console.log('requestTurnWithRetry calling createConversationTurn:', {
+        console.log('requestTurnWithRetry calling /api/conversation:', {
           attempt: attempt + 1,
           messagesCount: updatedMessages.length,
           materialLength: combinedMaterial.length,
         })
-        return await createConversationTurn(
-          updatedMessages,
-          combinedMaterial,
-          inferKnownDimensions(updatedMessages, outputs)
-        )
+        const knownDimensions = inferKnownDimensions(updatedMessages, outputs)
+        const response = await fetch('/api/conversation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: updatedMessages,
+            storyMaterial: combinedMaterial,
+            knownDimensions,
+          }),
+        })
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'Unable to read API error body')
+          console.error('requestTurnWithRetry /api/conversation non-200:', {
+            status: response.status,
+            statusText: response.statusText,
+            errorText,
+          })
+          throw new Error(`Conversation request failed (${response.status})`)
+        }
+
+        const payload = (await response.json()) as {
+          ready?: boolean
+          question?: string
+          summary?: string
+          error?: string
+        }
+        if (typeof payload.ready !== 'boolean') {
+          console.error('requestTurnWithRetry invalid payload:', payload)
+          throw new Error('Invalid conversation response payload')
+        }
+        return {
+          ready: payload.ready,
+          question: payload.question,
+          summary: payload.summary,
+        }
       } catch (error) {
         lastError = error
         console.error(`conversation turn attempt ${attempt + 1} failed:`, error)
@@ -389,7 +428,7 @@ export function WriterConversationExperience() {
       setPendingFiles([])
     } catch (error: unknown) {
       console.error('sendConversationTurn failure:', error)
-      setConversationError("Something went wrong on our end. Let's try that again.")
+      setConversationError(buildConversationErrorMessage(error))
     } finally {
       setThinking(false)
     }
@@ -398,7 +437,7 @@ export function WriterConversationExperience() {
   const handleRetryLastMessage = async () => {
     if (!lastMessageForRetry) {
       console.error('handleRetryLastMessage aborted: no last message available')
-      setConversationError("Something went wrong on our end. Let's try that again.")
+      setConversationError(buildConversationErrorMessage('No previous message available to retry'))
       return
     }
     console.log('handleRetryLastMessage retrying last message')
