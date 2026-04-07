@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,11 +12,18 @@ import { toast } from 'sonner'
 
 export default function SignupPage() {
   const [isPending, startTransition] = useTransition()
+  const searchParams = useSearchParams()
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     password: ''
   })
+
+  const errorParam = searchParams.get('error')
+  const errorMessage =
+    errorParam === 'signup_failed'
+      ? 'Could not create your account. Please try again.'
+      : null
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -30,11 +38,7 @@ export default function SignupPage() {
     form.append('password', formData.password)
 
     startTransition(async () => {
-      try {
-        await signup(form)
-      } catch {
-        toast.error('Failed to create account. Please try again.')
-      }
+      await signup(form)
     })
   }
 
@@ -64,6 +68,11 @@ export default function SignupPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {errorMessage && (
+              <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {errorMessage}
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="fullName">Full name</Label>

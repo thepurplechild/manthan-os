@@ -2,19 +2,33 @@
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { login } from '@/app/actions/auth'
-import { toast } from 'sonner'
 
 export default function LoginPage() {
   const [isPending, startTransition] = useTransition()
+  const searchParams = useSearchParams()
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   })
+
+  const errorParam = searchParams.get('error')
+  const messageParam = searchParams.get('message')
+
+  const errorMessage =
+    errorParam === 'invalid_credentials'
+      ? 'Invalid email or password. Please try again.'
+      : null
+
+  const infoMessage =
+    messageParam === 'check_email_to_confirm'
+      ? 'Account created. Please check your email and confirm before signing in.'
+      : null
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -24,11 +38,7 @@ export default function LoginPage() {
     form.append('password', formData.password)
 
     startTransition(async () => {
-      try {
-        await login(form)
-      } catch {
-        toast.error('Failed to sign in. Please check your credentials.')
-      }
+      await login(form)
     })
   }
 
@@ -58,6 +68,16 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {errorMessage && (
+              <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {errorMessage}
+              </div>
+            )}
+            {infoMessage && (
+              <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                {infoMessage}
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
