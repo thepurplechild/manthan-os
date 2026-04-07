@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ASSET_TYPE_COLORS, ASSET_TYPE_LABELS, formatFileSize } from '@/lib/types/projects'
 import type { Project } from '@/lib/types/projects'
 import { getDealsByProject } from '@/app/actions/dealPipeline'
-import { DealPipelineSection } from '@/components/founder/DealPipelineSection'
+import { DealPipelineBoard } from '@/components/founder/DealPipelineBoard'
 
 interface ProjectPageProps {
   params: Promise<{ id: string }>
@@ -43,7 +43,10 @@ export default async function FounderProjectPage({ params }: ProjectPageProps) {
     notFound()
   }
 
-  const projectData = project as Project & { owner: { id: string; full_name: string | null; email: string | null } }
+  const projectData = project as Project & {
+    status?: string | null
+    owner: { id: string; full_name: string | null; email: string | null }
+  }
 
   // Fetch project documents
   const { data: documents } = await supabase
@@ -189,7 +192,7 @@ export default async function FounderProjectPage({ params }: ProjectPageProps) {
         </TabsContent>
 
         <TabsContent value="pipeline">
-          <DealPipelineSection projectId={id} initialDeals={deals} />
+          <DealPipelineBoard initialDeals={deals} />
         </TabsContent>
       </Tabs>
     </div>

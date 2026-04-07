@@ -28,13 +28,7 @@ export async function GET(request: NextRequest) {
       
       // Copy all cookies from the request to the response to preserve session
       request.cookies.getAll().forEach((cookie) => {
-        response.cookies.set(cookie.name, cookie.value, {
-          httpOnly: cookie.httpOnly,
-          secure: cookie.secure,
-          sameSite: cookie.sameSite as 'lax' | 'strict' | 'none' | undefined,
-          path: cookie.path,
-          maxAge: cookie.maxAge,
-        })
+        response.cookies.set(cookie.name, cookie.value)
       })
 
       return response

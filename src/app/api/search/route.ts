@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
           model: 'voyage-3-lite'
         })
       })
-    } catch (fetchError) {
+    } catch (fetchError: unknown) {
       console.error('Voyage AI fetch error:', fetchError)
       return NextResponse.json({ error: 'Failed to connect to embedding service' }, { status: 503 })
     }
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     let voyageData: { data?: Array<{ embedding?: number[] }> }
     try {
       voyageData = await voyageResponse.json()
-    } catch (parseError) {
+    } catch (parseError: unknown) {
       console.error('Failed to parse Voyage AI response:', parseError)
       return NextResponse.json({ error: 'Invalid response from embedding service' }, { status: 500 })
     }
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
       count: results?.length || 0
     })
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Search endpoint error:', error)
     const errorMessage = error instanceof Error ? error.message : 'Internal server error'
     return NextResponse.json({

@@ -96,7 +96,7 @@ export function DealPipelineBoard({ initialDeals }: DealPipelineBoardProps) {
             ))}
           </select>
           <Button
-            variant={viewMode === 'kanban' ? 'outline' : 'default'}
+            variant="default"
             onClick={() => setViewMode('kanban')}
           >
             Kanban View
@@ -200,7 +200,7 @@ export function DealPipelineBoard({ initialDeals }: DealPipelineBoardProps) {
           ))}
         </select>
         <Button
-          variant={viewMode === 'table' ? 'outline' : 'default'}
+          variant="default"
           onClick={() => setViewMode('table')}
         >
           Table View

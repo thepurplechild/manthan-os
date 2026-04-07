@@ -4,13 +4,13 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { FolderOpen, Search, Plus } from 'lucide-react'
+import { FolderOpen } from 'lucide-react'
 import type { Project } from '@/lib/types/projects'
 
 export default async function FounderProjectsPage() {
   try {
     await requireFounder()
-  } catch (error) {
+  } catch {
     redirect('/dashboard')
   }
 
@@ -33,10 +33,18 @@ export default async function FounderProjectsPage() {
     console.error('Error fetching projects:', error)
   }
 
-  const projectsList = (projects || []).map((project: any) => ({
+  type ProjectWithOwner = Project & {
+    status?: string | null
+    owner: {
+      full_name: string | null
+      email: string | null
+    } | null
+  }
+
+  const projectsList = (projects || []).map((project: ProjectWithOwner) => ({
     ...project,
     owner_name: project.owner?.full_name || project.owner?.email || 'Unknown',
-  })) as Array<Project & { owner_name: string }>
+  })) as Array<Project & { status?: string | null; owner_name: string }>
 
   return (
     <div className="space-y-6">
