@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,14 +11,18 @@ import { login } from '@/app/actions/auth'
 
 export default function LoginPage() {
   const [isPending, startTransition] = useTransition()
-  const searchParams = useSearchParams()
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   })
+  const [errorParam, setErrorParam] = useState<string | null>(null)
+  const [messageParam, setMessageParam] = useState<string | null>(null)
 
-  const errorParam = searchParams.get('error')
-  const messageParam = searchParams.get('message')
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    setErrorParam(params.get('error'))
+    setMessageParam(params.get('message'))
+  }, [])
 
   const errorMessage =
     errorParam === 'invalid_credentials'

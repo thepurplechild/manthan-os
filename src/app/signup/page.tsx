@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,14 +12,18 @@ import { toast } from 'sonner'
 
 export default function SignupPage() {
   const [isPending, startTransition] = useTransition()
-  const searchParams = useSearchParams()
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     password: ''
   })
+  const [errorParam, setErrorParam] = useState<string | null>(null)
 
-  const errorParam = searchParams.get('error')
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    setErrorParam(params.get('error'))
+  }, [])
+
   const errorMessage =
     errorParam === 'signup_failed'
       ? 'Could not create your account. Please try again.'
