@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { isRedirectError } from 'next/dist/client/components/redirect-error'
 
 export async function login(formData: FormData) {
   try {
@@ -23,6 +24,9 @@ export async function login(formData: FormData) {
     revalidatePath('/', 'layout')
     redirect('/dashboard')
   } catch (error) {
+    if (isRedirectError(error)) {
+      throw error
+    }
     console.error('Login action failed:', error)
     const message =
       error instanceof Error && error.message.toLowerCase().includes('fetch failed')
@@ -60,6 +64,9 @@ export async function signup(formData: FormData) {
     revalidatePath('/', 'layout')
     redirect('/dashboard')
   } catch (error) {
+    if (isRedirectError(error)) {
+      throw error
+    }
     console.error('Signup action failed:', error)
     const message =
       error instanceof Error && error.message.toLowerCase().includes('fetch failed')
