@@ -74,7 +74,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#0A0A0A] text-[#E5E5E5]">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
@@ -85,14 +85,14 @@ export default function DashboardLayout({
 
       {/* Sidebar */}
       <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
+        fixed inset-y-0 left-0 z-50 w-64 bg-[#111111] border-r border-[#222222] transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-        <div className="flex items-center justify-between h-16 px-6 border-b">
-          <h1 className="text-xl font-semibold text-gray-900">Manthan OS</h1>
+        <div className="flex items-center justify-between h-16 px-6 border-b border-[#222222]">
+          <h1 className="text-xl font-light text-[#E5E5E5]">Manthan OS</h1>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500"
+            className="lg:hidden p-2 rounded-[8px] text-[#A3A3A3] hover:text-[#E5E5E5]"
           >
             <X className="h-5 w-5" />
           </button>
@@ -107,25 +107,25 @@ export default function DashboardLayout({
                   {item.name === 'New Story' ? (
                     <Link
                       href={item.href}
-                      className="flex items-center px-4 py-3 text-sm font-semibold rounded-lg bg-amber-100 text-amber-900 hover:bg-amber-200 transition-colors duration-150"
+                      className="flex items-center px-4 py-3 text-sm font-medium rounded-[8px] bg-[rgba(200,169,126,0.15)] text-[#C8A97E] hover:bg-[rgba(200,169,126,0.22)] transition-colors duration-150"
                       onClick={() => setSidebarOpen(false)}
                     >
-                      <item.icon className="mr-3 h-5 w-5 text-amber-900" />
+                      <item.icon className="mr-3 h-5 w-5 text-[#C8A97E]" />
                       {item.name}
                     </Link>
                   ) : (
                   <Link
                     href={item.href}
                     className={`
-                      flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-150
+                      flex items-center px-4 py-3 text-sm font-medium rounded-[8px] transition-colors duration-150
                       ${isActive
-                        ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700'
-                        : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                        ? 'bg-[rgba(200,169,126,0.15)] text-[#C8A97E]'
+                        : 'text-[#E5E5E5] hover:bg-[#1A1A1A] hover:text-[#E5E5E5]'
                       }
                     `}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <item.icon className={`mr-3 h-5 w-5 ${isActive ? 'text-blue-700' : 'text-gray-400'}`} />
+                    <item.icon className={`mr-3 h-5 w-5 ${isActive ? 'text-[#C8A97E]' : 'text-[#8A8A8A]'}`} />
                     {item.name}
                   </Link>
                   )}
@@ -139,46 +139,46 @@ export default function DashboardLayout({
       {/* Main content */}
       <div className="lg:pl-64">
         {/* Top bar */}
-        <div className="flex items-center justify-between h-16 px-6 bg-white border-b">
+        <div className="flex items-center justify-between h-16 px-6 bg-[#0A0A0A] border-b border-[#222222]">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500"
+            className="lg:hidden p-2 rounded-[8px] text-[#A3A3A3] hover:text-[#E5E5E5]"
           >
             <Menu className="h-5 w-5" />
           </button>
 
           <div className="flex items-center space-x-4">
-            <span className="text-lg font-semibold text-gray-900 lg:block hidden">
+            <span className="text-lg font-light text-[#E5E5E5] lg:block hidden">
               Manthan OS
             </span>
           </div>
 
           {/* User menu */}
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center space-x-3 text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <DropdownMenuTrigger className="flex items-center space-x-3 text-sm rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[#C8A97E]/50">
               <Avatar className="h-8 w-8">
                 <AvatarImage src={user?.avatarUrl} alt={user?.fullName} />
-                <AvatarFallback>
+                <AvatarFallback className="bg-[#1A1A1A] text-[#E5E5E5]">
                   <User className="h-4 w-4" />
                 </AvatarFallback>
               </Avatar>
               {!loading && user && (
-                <span className="hidden lg:block text-gray-700 font-medium">
+                <span className="hidden lg:block text-[#E5E5E5] font-medium">
                   {user.fullName}
                 </span>
               )}
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="end" className="w-56 bg-[#111111] border-[#222222] text-[#E5E5E5]">
               {user && (
                 <>
                   <div className="px-4 py-3">
-                    <p className="text-sm font-medium text-gray-900">{user.fullName}</p>
-                    <p className="text-sm text-gray-500">{user.email}</p>
+                    <p className="text-sm font-medium text-[#E5E5E5]">{user.fullName}</p>
+                    <p className="text-sm text-[#8A8A8A]">{user.email}</p>
                   </div>
                   <DropdownMenuSeparator />
                 </>
               )}
-              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
+              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer focus:bg-[#1A1A1A] focus:text-[#E5E5E5]">
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign out
               </DropdownMenuItem>
@@ -187,7 +187,7 @@ export default function DashboardLayout({
         </div>
 
         {/* Page content */}
-        <main className="p-6">
+        <main className="p-6 bg-[#0A0A0A]">
           {children}
         </main>
       </div>

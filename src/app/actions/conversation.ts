@@ -80,6 +80,9 @@ Otherwise respond with exactly this JSON:
 Respond ONLY with JSON. No other text.
 `.trim()
 
+const SAFE_FALLBACK_QUESTION =
+  'Tell me more about the central character in your story — are they a protagonist, an antagonist, or an anti-hero, and what drives them?'
+
 function extractJsonObject(raw: string): string {
   const start = raw.indexOf('{')
   const end = raw.lastIndexOf('}')
@@ -123,6 +126,7 @@ export async function createConversationTurn(
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
+      signal: AbortSignal.timeout(30_000),
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 500,
@@ -131,13 +135,34 @@ export async function createConversationTurn(
       }),
     })
 
+    const rawResponseText = await response.text()
+    console.log('createConversationTurn raw Anthropic response:', rawResponseText)
+
     if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unknown Anthropic error')
-      throw new Error(`Conversation model request failed: ${errorText}`)
+      console.error('createConversationTurn non-200 response:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: rawResponseText,
+      })
+      throw new Error('Conversation model request failed')
     }
 
-    const data = (await response.json()) as {
+    let data: {
       content?: Array<{ type?: string; text?: string }>
+    }
+    try {
+      data = JSON.parse(rawResponseText) as {
+        content?: Array<{ type?: string; text?: string }>
+      }
+    } catch (parseError) {
+      console.error('createConversationTurn failed parsing Anthropic JSON payload:', {
+        parseError,
+        rawResponseText,
+      })
+      return {
+        ready: false,
+        question: SAFE_FALLBACK_QUESTION,
+      }
     }
 
     const rawText = (data.content || [])
@@ -150,10 +175,26 @@ export async function createConversationTurn(
       throw new Error('Conversation model returned empty response')
     }
 
-    const parsed = JSON.parse(extractJsonObject(rawText)) as {
+    let parsed: {
       ready?: boolean
       question?: string
       summary?: string
+    }
+    try {
+      parsed = JSON.parse(extractJsonObject(rawText)) as {
+        ready?: boolean
+        question?: string
+        summary?: string
+      }
+    } catch (parseError) {
+      console.error('createConversationTurn response JSON parse failed:', {
+        parseError,
+        rawText,
+      })
+      return {
+        ready: false,
+        question: SAFE_FALLBACK_QUESTION,
+      }
     }
 
     if (typeof parsed.ready !== 'boolean') {
@@ -172,11 +213,10 @@ export async function createConversationTurn(
       question: parsed.question || 'What audience are you writing this for, and why that audience?',
     }
   } catch (error) {
-    console.error('createConversationTurn error:', error)
+    console.error('createConversationTurn full error object:', error)
     return {
       ready: false,
-      question:
-        'Let us anchor the story first. Who is this story for, and what emotion should they leave with?',
+      question: SAFE_FALLBACK_QUESTION,
     }
   }
 }

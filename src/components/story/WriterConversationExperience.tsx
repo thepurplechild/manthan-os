@@ -6,7 +6,6 @@ import { useDropzone } from 'react-dropzone'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
@@ -80,6 +79,8 @@ export function WriterConversationExperience() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [saveInFlight, setSaveInFlight] = useState(false)
   const [outputs, setOutputs] = useState<GeneratedOutputs>({})
+  const [conversationError, setConversationError] = useState<string | null>(null)
+  const [lastMessageForRetry, setLastMessageForRetry] = useState<string>('')
 
   const knownDimensions = useMemo(() => inferKnownDimensions(messages, outputs), [messages, outputs])
 
@@ -289,20 +290,48 @@ export function WriterConversationExperience() {
   }
 
   const handleBeginOrReply = async () => {
-    if (!draft.trim() && pendingFiles.length === 0) return
+    await sendConversationTurn(draft.trim(), pendingFiles)
+  }
 
+  const requestTurnWithRetry = async (
+    updatedMessages: Message[],
+    combinedMaterial: string
+  ): Promise<{ ready: boolean; question?: string; summary?: string }> => {
+    let lastError: unknown
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await createConversationTurn(
+          updatedMessages,
+          combinedMaterial,
+          inferKnownDimensions(updatedMessages, outputs)
+        )
+      } catch (error) {
+        lastError = error
+        console.error(`conversation turn attempt ${attempt + 1} failed:`, error)
+      }
+    }
+    throw lastError || new Error('Conversation turn failed')
+  }
+
+  const sendConversationTurn = async (messageText: string, filesToUpload: File[]) => {
+    if (!messageText && filesToUpload.length === 0) return
     setThinking(true)
+    setConversationError(null)
     try {
-      const newFileIds = await uploadFilesAndReturnIds(pendingFiles)
+      setLastMessageForRetry(messageText)
+      const newFileIds = await uploadFilesAndReturnIds(filesToUpload)
       if (newFileIds.length > 0) {
         setUploadedFileIds((prev) => [...prev, ...newFileIds])
       }
 
-      const userMessage: Message = { role: 'writer', content: draft.trim() || 'Uploaded reference files for context.' }
+      const userMessage: Message = {
+        role: 'writer',
+        content: messageText || 'Uploaded reference files for context.',
+      }
       const updatedMessages = [...messages, userMessage]
       setMessages(updatedMessages)
 
-      const combinedMaterial = [storyMaterial, draft.trim(), pendingFiles.map((f) => `[Attachment] ${f.name}`).join('\n')]
+      const combinedMaterial = [storyMaterial, messageText, filesToUpload.map((f) => `[Attachment] ${f.name}`).join('\n')]
         .filter(Boolean)
         .join('\n\n')
       setStoryMaterial(combinedMaterial)
@@ -310,7 +339,7 @@ export function WriterConversationExperience() {
       const docId = await ensureWorkingDocument(combinedMaterial || userMessage.content)
       await updateWorkingDocumentText(docId, combinedMaterial || userMessage.content)
 
-      const turn = await createConversationTurn(updatedMessages, combinedMaterial, inferKnownDimensions(updatedMessages, outputs))
+      const turn = await requestTurnWithRetry(updatedMessages, combinedMaterial)
       if (turn.ready) {
         setMessages((prev) => [
           ...prev,
@@ -329,12 +358,17 @@ export function WriterConversationExperience() {
 
       setDraft('')
       setPendingFiles([])
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(error)
-      toast.error('Something went wrong. Please try again.')
+      setConversationError("Something went wrong on our end. Let's try that again.")
     } finally {
       setThinking(false)
     }
+  }
+
+  const handleRetryLastMessage = async () => {
+    if (!lastMessageForRetry) return
+    await sendConversationTurn(lastMessageForRetry, [])
   }
 
   const handleSaveProject = async () => {
@@ -394,149 +428,169 @@ export function WriterConversationExperience() {
   ]
 
   return (
-    <div className="min-h-[calc(100vh-7rem)] rounded-2xl bg-[#0A0A0A] p-4 md:p-6">
+    <div className="min-h-[calc(100vh-7rem)] bg-[#0A0A0A] p-6 md:p-8">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3 space-y-4">
-          <div className="px-2">
-            <div className="text-[#C8A97E] text-sm tracking-[0.18em] uppercase">Manthan OS</div>
-            <h1 className="text-3xl font-semibold text-[#F3EDE3] mt-2">New Story</h1>
+          <div>
+            <div className="text-[#C8A97E] text-xs tracking-[0.22em] uppercase">Manthan OS</div>
+            <h1 className="mt-2 text-white text-[2.5rem] font-light leading-tight">New Story</h1>
           </div>
 
-          <Card className="border-zinc-800 bg-zinc-950">
-            <CardContent className="pt-6 space-y-4">
-              <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1">
-                {messages.length === 0 ? (
-                  <div className="text-zinc-400 text-sm">
-                    Start with anything: a feeling, a character, a conflict, or a world.
-                  </div>
-                ) : (
-                  messages.map((message, idx) => (
-                    <div key={`${message.role}-${idx}`} className={`flex ${message.role === 'writer' ? 'justify-end' : 'justify-start'}`}>
+          <div className="space-y-4">
+            <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1">
+              {messages.length === 0 ? (
+                <div className="text-[#666666] text-sm">
+                  Start with anything: a feeling, a character, a conflict, or a world.
+                </div>
+              ) : (
+                messages.map((message, idx) => (
+                  <div key={`${message.role}-${idx}`} className={`flex ${message.role === 'writer' ? 'justify-end' : 'justify-start'}`}>
+                    <div className="max-w-[85%]">
+                      {message.role === 'manthan' && (
+                        <div className="mb-1 text-[10px] uppercase tracking-[0.16em] text-[#C8A97E]">Manthan</div>
+                      )}
                       <div
-                        className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${
+                        className={`px-4 py-3 text-sm whitespace-pre-wrap rounded-[8px] ${
                           message.role === 'writer'
-                            ? 'bg-zinc-800 text-zinc-100'
-                            : 'bg-zinc-900 text-[#F3EDE3] border border-zinc-800'
+                            ? 'bg-[#1A1A1A] text-[#E5E5E5] ml-auto max-w-[80%]'
+                            : 'bg-[#111111] border-l-2 border-l-[#C8A97E] text-[#E5E5E5]'
                         }`}
                       >
                         {message.content}
                       </div>
                     </div>
-                  ))
-                )}
-                {thinking && <div className="text-zinc-500 text-sm animate-pulse">Manthan is thinking...</div>}
-              </div>
+                  </div>
+                ))
+              )}
+              {thinking && <div className="text-[#666666] text-sm animate-pulse">Manthan is thinking...</div>}
+            </div>
 
-              <Textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                className="min-h-32 bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
-                placeholder="What's your story about? Tell me anything — a feeling, a character, a situation, a world."
-              />
-
-              <div
-                {...getRootProps()}
-                className={`rounded-xl border border-dashed p-4 cursor-pointer transition-colors ${
-                  isDragActive ? 'border-[#C8A97E] bg-zinc-900' : 'border-zinc-700 bg-zinc-950'
-                }`}
-              >
-                <input {...getInputProps()} />
-                <div className="flex items-center gap-2 text-sm text-zinc-300">
-                  <Upload className="h-4 w-4" />
-                  <span>Or drop files here - script, screenplay, one-pager, reference images, PDF, Word, PPT</span>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {pendingFiles.map((file) => (
-                    <Badge key={`${file.name}-${file.size}`} variant="secondary" className="bg-zinc-800 text-zinc-200">
-                      {file.name}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <Button onClick={handleBeginOrReply} className="bg-[#C8A97E] text-black hover:bg-[#d8ba90]">
-                  {messages.length === 0 ? 'Begin ->' : 'Send ->'}
+            {conversationError && (
+              <div className="rounded-[8px] border border-[#2A2A2A] bg-[#111111] p-3 text-sm text-[#E5E5E5]">
+                <p>{conversationError}</p>
+                <Button
+                  variant="ghost"
+                  className="mt-2 h-auto p-0 text-[#C8A97E] hover:bg-transparent hover:text-[#e0bf91]"
+                  onClick={handleRetryLastMessage}
+                >
+                  Retry
                 </Button>
-
-                {(outputs.logline || outputs.synopsis) && (
-                  <Button
-                    onClick={handleSaveProject}
-                    disabled={saveInFlight}
-                    className="bg-zinc-100 text-zinc-900 hover:bg-white"
-                  >
-                    {saveInFlight ? 'Saving...' : 'Save as Project'}
-                  </Button>
-                )}
               </div>
-            </CardContent>
-          </Card>
+            )}
+
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              className="min-h-36 rounded-[8px] border-[#2A2A2A] bg-[#111111] p-5 text-white placeholder:text-[#555555] focus-visible:ring-0 focus-visible:border-[#C8A97E]/50"
+              placeholder="What's your story about? Tell me anything — a feeling, a character, a situation, a world."
+            />
+
+            <div
+              {...getRootProps()}
+              className={`rounded-[8px] border border-dashed border-[#2A2A2A] p-4 cursor-pointer transition-colors ${
+                isDragActive ? 'border-[#C8A97E]/30' : 'hover:border-[#C8A97E]/30'
+              }`}
+            >
+              <input {...getInputProps()} />
+              <div className="flex items-center gap-2 text-sm text-[#555555]">
+                <Upload className="h-4 w-4" />
+                <span>Or drop files here - script, screenplay, one-pager, reference images, PDF, Word, PPT</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {pendingFiles.map((file) => (
+                  <Badge key={`${file.name}-${file.size}`} variant="secondary" className="rounded-[4px] bg-[#1A1A1A] text-[#E5E5E5]">
+                    {file.name}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                onClick={handleBeginOrReply}
+                className="rounded-[4px] bg-[#C8A97E] text-[#0A0A0A] font-medium hover:brightness-110"
+              >
+                {messages.length === 0 ? 'Begin ->' : 'Send ->'}
+              </Button>
+
+              {(outputs.logline || outputs.synopsis) && (
+                <Button
+                  onClick={handleSaveProject}
+                  disabled={saveInFlight}
+                  className="rounded-[4px] bg-[#1A1A1A] text-[#E5E5E5] hover:bg-[#222222] border border-[#2A2A2A]"
+                >
+                  {saveInFlight ? 'Saving...' : 'Save as Project'}
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="lg:col-span-2 space-y-4">
-          <Card className="border-zinc-800 bg-zinc-950">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-[#F3EDE3] text-base">Live Outputs</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-sm text-zinc-400">
-                {(outputs.logline || outputs.synopsis || outputs.onePager)
-                  ? 'Your package is updating as the conversation evolves.'
-                  : 'Your story package will appear here as we talk.'}
-              </div>
+          <div className="rounded-[8px] border border-[#1A1A1A] bg-[#0D0D0D] p-4 space-y-4">
+            <h2 className="text-white text-2xl font-light">Live Outputs</h2>
+            <div className="text-sm text-[#444444]">
+              {(outputs.logline || outputs.synopsis || outputs.onePager)
+                ? 'Your package is updating as the conversation evolves.'
+                : 'Your story package will appear here as we talk.'}
+            </div>
 
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs text-zinc-400">
-                  <span>Story readiness</span>
-                  <span>{dimensionProgress.complete}/5</span>
-                </div>
-                <Progress value={dimensionProgress.percent} className="h-2 bg-zinc-800" />
-                <div className="grid grid-cols-2 gap-2 text-xs text-zinc-500">
-                  {['Audience', 'Themes', 'Character', 'World', 'Stakes'].map((label) => (
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-[#888888]">
+                <span>Story readiness</span>
+                <span>{dimensionProgress.complete}/5</span>
+              </div>
+              <Progress value={dimensionProgress.percent} className="h-2 bg-[#1A1A1A]" />
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {['Audience', 'Themes', 'Character', 'World', 'Stakes'].map((label) => {
+                  const key = label.toLowerCase()
+                  const isKnown = key in knownDimensions && Boolean((knownDimensions as Record<string, unknown>)[key])
+                  return (
                     <div key={label} className="flex items-center gap-2">
-                      <span className={label.toLowerCase() in knownDimensions && (knownDimensions as Record<string, unknown>)[label.toLowerCase()] ? 'text-[#C8A97E]' : ''}>
-                        {label}
-                      </span>
+                      <span className={`h-2 w-2 rounded-full ${isKnown ? 'bg-[#C8A97E]' : 'bg-[#2A2A2A]'}`} />
+                      <span className={isKnown ? 'text-[#C8A97E]' : 'text-[#666666]'}>{label}</span>
                     </div>
-                  ))}
-                </div>
+                  )
+                })}
               </div>
+            </div>
 
-              {isGenerating && (
-                <div className="text-sm text-zinc-400 animate-pulse flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  Generating your story package...
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            {isGenerating && (
+              <div className="text-sm text-[#666666] animate-pulse flex items-center gap-2">
+                <Sparkles className="h-4 w-4" />
+                Manthan is thinking...
+              </div>
+            )}
+          </div>
 
           {outputCards.map((card) =>
             card.content ? (
-              <Card key={card.key} className="border-zinc-800 bg-zinc-950">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm tracking-wide text-[#C8A97E]">{card.title}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <pre className="whitespace-pre-wrap text-xs text-zinc-200 font-sans">{card.content}</pre>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="secondary" onClick={() => handleRegenerate(card.key)}>
-                      Regenerate
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={async () => {
-                        await navigator.clipboard.writeText(card.content)
-                        toast.success('Copied')
-                      }}
-                    >
-                      <Copy className="h-4 w-4 mr-1" />
-                      Copy
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+              <div key={card.key} className="rounded-[8px] border border-[#1E1E1E] bg-[#111111] p-4 space-y-3">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-[#C8A97E]">{card.title}</div>
+                <pre className="whitespace-pre-wrap text-sm leading-7 text-[#E5E5E5] font-sans">{card.content}</pre>
+                <div className="flex gap-4">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-auto p-0 text-[#666666] hover:text-[#C8A97E] hover:bg-transparent"
+                    onClick={() => handleRegenerate(card.key)}
+                  >
+                    Regenerate
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-auto p-0 text-[#666666] hover:text-[#C8A97E] hover:bg-transparent"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(card.content)
+                      toast.success('Copied')
+                    }}
+                  >
+                    <Copy className="h-4 w-4 mr-1" />
+                    Copy
+                  </Button>
+                </div>
+              </div>
             ) : null
           )}
         </div>
