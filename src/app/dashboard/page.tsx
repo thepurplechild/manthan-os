@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { FileText, Clock, CheckCircle } from 'lucide-react'
+import { FileText, Clock, CheckCircle, Sparkles } from 'lucide-react'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -64,6 +64,23 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      <Card className="border-amber-200 bg-amber-50/70">
+        <CardContent className="py-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-amber-700" />
+              Start with New Story
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Open Manthan conversation mode to shape an idea into a complete story package.
+            </p>
+          </div>
+          <Button asChild size="lg">
+            <Link href="/dashboard/new">New Story</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
       <div>
         <h1 className="text-3xl font-bold">Welcome back, {profile?.full_name || 'there'}!</h1>
         <p className="text-muted-foreground mt-2">

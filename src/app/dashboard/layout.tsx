@@ -8,6 +8,7 @@ import {
   FileText,
   Upload,
   Settings,
+  Sparkles,
   Menu,
   X,
   LogOut,
@@ -25,6 +26,7 @@ import {
 import { getUserProfile, logout } from '@/app/actions/auth'
 
 const navigation = [
+  { name: 'New Story', href: '/dashboard/new', icon: Sparkles },
   { name: 'Dashboard', href: '/dashboard', icon: Home },
   { name: 'Projects', href: '/dashboard/projects', icon: FolderOpen },
   { name: 'Documents', href: '/dashboard/documents', icon: FileText },
@@ -102,6 +104,16 @@ export default function DashboardLayout({
               const isActive = pathname === item.href
               return (
                 <li key={item.name}>
+                  {item.name === 'New Story' ? (
+                    <Link
+                      href={item.href}
+                      className="flex items-center px-4 py-3 text-sm font-semibold rounded-lg bg-amber-100 text-amber-900 hover:bg-amber-200 transition-colors duration-150"
+                      onClick={() => setSidebarOpen(false)}
+                    >
+                      <item.icon className="mr-3 h-5 w-5 text-amber-900" />
+                      {item.name}
+                    </Link>
+                  ) : (
                   <Link
                     href={item.href}
                     className={`
@@ -116,6 +128,7 @@ export default function DashboardLayout({
                     <item.icon className={`mr-3 h-5 w-5 ${isActive ? 'text-blue-700' : 'text-gray-400'}`} />
                     {item.name}
                   </Link>
+                  )}
                 </li>
               )
             })}
