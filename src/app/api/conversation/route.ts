@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import Anthropic from '@anthropic-ai/sdk'
 
 export const maxDuration = 30
 
@@ -88,11 +89,13 @@ function deriveMissingDimensions(knownDimensions: Record<string, unknown>) {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('Conversation API called')
     const body = (await request.json()) as {
       messages?: ConversationMessage[]
       storyMaterial?: string
       knownDimensions?: Record<string, unknown>
     }
+    console.log('Conversation API request body:', body)
 
     const messages = body.messages || []
     const storyMaterial = body.storyMaterial || ''
@@ -117,69 +120,19 @@ export async function POST(request: NextRequest) {
       .replace('{known_dimensions}', JSON.stringify(knownDimensions, null, 2))
       .replace('{missing_dimensions}', JSON.stringify(missingDimensions, null, 2))
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      signal: AbortSignal.timeout(30_000),
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 500,
-        temperature: 0.4,
-        messages: [{ role: 'user', content: prompt }],
-      }),
+    const client = new Anthropic({ apiKey })
+    console.log('Before Anthropic API call')
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      temperature: 0.4,
+      messages: [{ role: 'user', content: prompt }],
     })
+    console.log('After Anthropic API call')
+    console.log('conversation api raw Anthropic response:', JSON.stringify(message, null, 2))
 
-    const rawResponseText = await response.text()
-    console.log('conversation api raw Anthropic response:', rawResponseText)
-
-    if (!response.ok) {
-      let upstreamErrorMessage = 'Conversation model request failed'
-      try {
-        const parsed = JSON.parse(rawResponseText) as { error?: { message?: string } }
-        upstreamErrorMessage = parsed.error?.message || upstreamErrorMessage
-      } catch {
-        upstreamErrorMessage = rawResponseText || upstreamErrorMessage
-      }
-      console.error('conversation api non-200 response:', {
-        status: response.status,
-        statusText: response.statusText,
-        body: rawResponseText,
-      })
-      return NextResponse.json(
-        {
-          ready: false,
-          question: SAFE_FALLBACK_QUESTION,
-          error: upstreamErrorMessage,
-        },
-        { status: 502 }
-      )
-    }
-
-    let data: { content?: Array<{ type?: string; text?: string }> }
-    try {
-      data = JSON.parse(rawResponseText) as { content?: Array<{ type?: string; text?: string }> }
-    } catch (parseError) {
-      console.error('conversation api failed parsing Anthropic JSON payload:', {
-        parseError,
-        rawResponseText,
-      })
-      return NextResponse.json(
-        {
-          ready: false,
-          question: SAFE_FALLBACK_QUESTION,
-          error: 'Anthropic response was not valid JSON',
-        },
-        { status: 502 }
-      )
-    }
-
-    const rawText = (data.content || [])
-      .filter((block) => block.type === 'text' && block.text)
-      .map((block) => block.text as string)
+    const rawText = (message.content || [])
+      .flatMap((block) => (block.type === 'text' ? [block.text] : []))
       .join('\n')
       .trim()
 
@@ -223,6 +176,11 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('conversation api unexpected error:', error)
+    if (error && typeof error === 'object' && 'status' in error && 'message' in error) {
+      const typedError = error as { status?: number; message?: string }
+      console.error('Anthropic status:', typedError.status, typedError.message)
+    }
+    console.error('Full error:', JSON.stringify(error, null, 2))
     const errorMessage = error instanceof Error ? error.message : 'Unknown server error'
     return NextResponse.json(
       {
