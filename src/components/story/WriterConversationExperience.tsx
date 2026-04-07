@@ -412,11 +412,10 @@ export function WriterConversationExperience() {
         .join('\n\n')
       setStoryMaterial(combinedMaterial)
 
-      const docId = await ensureWorkingDocument(combinedMaterial || userMessage.content)
-      await updateWorkingDocumentText(docId, combinedMaterial || userMessage.content)
-
       const turn = await requestTurnWithRetry(updatedMessages, combinedMaterial)
       console.log('sendConversationTurn received turn response:', turn)
+      const docId = await ensureWorkingDocument(combinedMaterial || userMessage.content)
+      await updateWorkingDocumentText(docId, combinedMaterial || userMessage.content)
       if (turn.ready) {
         setMessages((prev) => [
           ...prev,
