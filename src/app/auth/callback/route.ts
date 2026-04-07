@@ -5,35 +5,21 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const next = searchParams.get('next') ?? '/dashboard'
+  const safeNext = next.startsWith('/') ? next : '/dashboard'
 
   if (code) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      // Get the response from the redirect to preserve cookies
-      const forwardedHost = request.headers.get('x-forwarded-host')
-      const isLocalEnv = process.env.NODE_ENV === 'development'
-      
-      let redirectUrl: string
-      if (isLocalEnv) {
-        redirectUrl = `${origin}${next}`
-      } else if (forwardedHost) {
-        redirectUrl = `https://${forwardedHost}${next}`
-      } else {
-        redirectUrl = `${origin}${next}`
-      }
-
-      // Create redirect response and preserve all cookies from the Supabase client
-      const response = NextResponse.redirect(redirectUrl)
-      
-      // Copy all cookies from the request to the response to preserve session
-      request.cookies.getAll().forEach((cookie) => {
-        response.cookies.set(cookie.name, cookie.value)
-      })
-
-      return response
+      return NextResponse.redirect(`${origin}${safeNext}`)
     }
+
+    return NextResponse.redirect(
+      `${origin}/login?error=${encodeURIComponent(error.message || 'auth_callback_failed')}`
+    )
   }
 
-  return NextResponse.redirect(`${origin}/auth/auth-code-error`)
+  return NextResponse.redirect(
+    `${origin}/login?error=${encodeURIComponent('Missing auth callback code. Please sign in again.')}`
+  )
 }
