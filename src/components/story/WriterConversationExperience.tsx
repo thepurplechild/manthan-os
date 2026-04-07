@@ -99,6 +99,7 @@ export function WriterConversationExperience() {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
+      console.error('uploadFilesAndReturnIds auth failure:', { authError, hasUser: Boolean(user) })
       throw new Error('Please log in again to upload files.')
     }
 
@@ -111,7 +112,10 @@ export function WriterConversationExperience() {
         upsert: false,
         contentType: file.type,
       })
-      if (storageError) throw new Error(storageError.message)
+      if (storageError) {
+        console.error('uploadFilesAndReturnIds storage upload failure:', { fileName: file.name, storageError })
+        throw new Error(storageError.message)
+      }
 
       const {
         data: { publicUrl },
@@ -135,6 +139,11 @@ export function WriterConversationExperience() {
         .single()
 
       if (documentError || !document) {
+        console.error('uploadFilesAndReturnIds document insert failure:', {
+          fileName: file.name,
+          documentError,
+          hasDocument: Boolean(document),
+        })
         throw new Error(documentError?.message || 'Failed to create file record')
       }
 
@@ -152,7 +161,10 @@ export function WriterConversationExperience() {
             fileName: file.name,
           },
         }),
-      }).catch(() => null)
+      }).catch((error) => {
+        console.error('uploadFilesAndReturnIds inngest trigger failure:', { documentId: document.id, error })
+        return null
+      })
     }
     return ids
   }
@@ -164,7 +176,10 @@ export function WriterConversationExperience() {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser()
-    if (authError || !user) throw new Error('Not authenticated')
+    if (authError || !user) {
+      console.error('ensureWorkingDocument auth failure:', { authError, hasUser: Boolean(user) })
+      throw new Error('Not authenticated')
+    }
 
     const storagePath = `${user.id}/conversation/${Date.now()}-seed.txt`
     const { data: document, error } = await supabase
@@ -185,6 +200,7 @@ export function WriterConversationExperience() {
       .single()
 
     if (error || !document) {
+      console.error('ensureWorkingDocument insert failure:', { error, hasDocument: Boolean(document) })
       throw new Error(error?.message || 'Could not initialize story session')
     }
 
@@ -193,13 +209,17 @@ export function WriterConversationExperience() {
   }
 
   const updateWorkingDocumentText = async (documentId: string, content: string) => {
-    await supabase
+    const { error } = await supabase
       .from('documents')
       .update({
         extracted_text: content,
         file_size_bytes: content.length,
       })
       .eq('id', documentId)
+    if (error) {
+      console.error('updateWorkingDocumentText failure:', { documentId, error })
+      throw new Error(error.message || 'Failed updating working document')
+    }
   }
 
   const generateOutputs = async (documentId: string) => {
@@ -300,6 +320,11 @@ export function WriterConversationExperience() {
     let lastError: unknown
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
+        console.log('requestTurnWithRetry calling createConversationTurn:', {
+          attempt: attempt + 1,
+          messagesCount: updatedMessages.length,
+          materialLength: combinedMaterial.length,
+        })
         return await createConversationTurn(
           updatedMessages,
           combinedMaterial,
@@ -314,7 +339,10 @@ export function WriterConversationExperience() {
   }
 
   const sendConversationTurn = async (messageText: string, filesToUpload: File[]) => {
-    if (!messageText && filesToUpload.length === 0) return
+    if (!messageText && filesToUpload.length === 0) {
+      console.error('sendConversationTurn aborted: empty message and no files')
+      return
+    }
     setThinking(true)
     setConversationError(null)
     try {
@@ -340,6 +368,7 @@ export function WriterConversationExperience() {
       await updateWorkingDocumentText(docId, combinedMaterial || userMessage.content)
 
       const turn = await requestTurnWithRetry(updatedMessages, combinedMaterial)
+      console.log('sendConversationTurn received turn response:', turn)
       if (turn.ready) {
         setMessages((prev) => [
           ...prev,
@@ -359,7 +388,7 @@ export function WriterConversationExperience() {
       setDraft('')
       setPendingFiles([])
     } catch (error: unknown) {
-      console.error(error)
+      console.error('sendConversationTurn failure:', error)
       setConversationError("Something went wrong on our end. Let's try that again.")
     } finally {
       setThinking(false)
@@ -367,7 +396,12 @@ export function WriterConversationExperience() {
   }
 
   const handleRetryLastMessage = async () => {
-    if (!lastMessageForRetry) return
+    if (!lastMessageForRetry) {
+      console.error('handleRetryLastMessage aborted: no last message available')
+      setConversationError("Something went wrong on our end. Let's try that again.")
+      return
+    }
+    console.log('handleRetryLastMessage retrying last message')
     await sendConversationTurn(lastMessageForRetry, [])
   }
 
@@ -380,7 +414,8 @@ export function WriterConversationExperience() {
       const result = await saveStoryProject(title, messages, outputs, uploadedFileIds)
       toast.success('Project saved.')
       router.push(`/dashboard/projects/${result.projectId}`)
-    } catch {
+    } catch (error) {
+      console.error('handleSaveProject failure:', error)
       toast.error('Could not save project. Please retry.')
     } finally {
       setSaveInFlight(false)
