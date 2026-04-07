@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 import requests
+from urllib.parse import urlparse
 from typing import Dict, Any
 
 logging.basicConfig(
@@ -13,6 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 from processors.pdf_extractor import extract_text_from_pdf
+from processors.docx_extractor import extract as extract_docx
+from processors.pptx_extractor import extract as extract_pptx
+from processors.image_extractor import extract as extract_image
+from processors.text_extractor import extract as extract_text
 from processors.embeddings import generate_embeddings
 
 # Supabase configuration
@@ -41,8 +46,68 @@ def download_from_signed_url(storage_url: str) -> bytes:
     response.raise_for_status()
     return response.content
 
-def extract_document_text(document_id: str, storage_url: str) -> Dict[str, Any]:
-    """Extract text from uploaded PDF"""
+def _get_extension_from_url(storage_url: str) -> str:
+    path = urlparse(storage_url).path.lower()
+    if "." not in path:
+        return ""
+    return path.rsplit(".", 1)[-1]
+
+def _extract_with_router(file_data: bytes, mime_type: str = None, storage_url: str = "") -> str:
+    mime = (mime_type or "").lower().strip()
+    ext = _get_extension_from_url(storage_url)
+
+    logger.info(f"Extractor routing: mime_type={mime or 'unknown'}, extension={ext or 'unknown'}")
+
+    # PDF
+    if mime == "application/pdf" or ext == "pdf":
+        return extract_text_from_pdf(file_data)
+
+    # DOCX / DOC (best effort via python-docx)
+    if mime in (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/msword",
+    ) or ext in ("docx", "doc"):
+        return extract_docx(file_data)
+
+    # PPTX / PPT (best effort via python-pptx)
+    if mime == "application/vnd.openxmlformats-officedocument.presentationml.presentation" or ext in ("pptx", "ppt"):
+        return extract_pptx(file_data)
+
+    # Images
+    if mime in ("image/jpeg", "image/png", "image/webp") or ext in ("jpg", "jpeg", "png", "webp"):
+        return extract_image(file_data)
+
+    # Plain text / markdown
+    if mime in ("text/plain", "text/markdown") or ext in ("txt", "md", "markdown"):
+        return extract_text(file_data)
+
+    # Unknown -> PDF fallback
+    logger.warning(
+        f"Unknown mime_type/extension (mime={mime or 'n/a'}, ext={ext or 'n/a'}). Falling back to PDF extractor."
+    )
+    return extract_text_from_pdf(file_data)
+
+def _update_extraction_failed(document_id: str, error_message: str) -> None:
+    # Try storing descriptive error message if supported by DB schema.
+    try:
+        supabase_request(
+            "PATCH",
+            f"documents?id=eq.{document_id}",
+            {"processing_status": "EXTRACTION_FAILED", "error_message": error_message[:1000]},
+        )
+        return
+    except Exception:
+        pass
+
+    # Fallback if documents.error_message column does not exist.
+    supabase_request(
+        "PATCH",
+        f"documents?id=eq.{document_id}",
+        {"processing_status": "EXTRACTION_FAILED"},
+    )
+
+def extract_document_text(document_id: str, storage_url: str, mime_type: str = None) -> Dict[str, Any]:
+    """Extract text from uploaded files (PDF/DOCX/PPTX/image/text)."""
     try:
         # Trim any whitespace from document_id
         document_id = document_id.strip() if document_id else None
@@ -64,19 +129,30 @@ def extract_document_text(document_id: str, storage_url: str) -> Dict[str, Any]:
         logger.info(f"Downloading file from signed URL")
         file_data = download_from_signed_url(storage_url)
 
-        # Extract text
-        extracted_text = extract_text_from_pdf(file_data)
+        # Extract text using format router
+        extracted_text = _extract_with_router(file_data, mime_type=mime_type, storage_url=storage_url)
         logger.info(f"Extracted {len(extracted_text)} characters")
 
         # Update document with extracted text
-        supabase_request(
-            "PATCH",
-            f"documents?id=eq.{document_id}",
-            {
-                "extracted_text": extracted_text,
-                "processing_status": "EXTRACTED"
-            }
-        )
+        try:
+            supabase_request(
+                "PATCH",
+                f"documents?id=eq.{document_id}",
+                {
+                    "extracted_text": extracted_text,
+                    "processing_status": "EXTRACTED",
+                    "error_message": None,
+                }
+            )
+        except Exception:
+            supabase_request(
+                "PATCH",
+                f"documents?id=eq.{document_id}",
+                {
+                    "extracted_text": extracted_text,
+                    "processing_status": "EXTRACTED"
+                }
+            )
 
 
         return {
@@ -90,12 +166,8 @@ def extract_document_text(document_id: str, storage_url: str) -> Dict[str, Any]:
 
         # Update status to failed
         try:
-            supabase_request(
-                "PATCH",
-                f"documents?id=eq.{document_id}",
-                {"processing_status": "EXTRACTION_FAILED"}
-            )
-        except:
+            _update_extraction_failed(document_id, str(e))
+        except Exception:
             pass
 
         return {

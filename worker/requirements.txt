@@ -5,3 +5,7 @@ voyageai==0.2.3
 requests==2.31.0
 python-dotenv==1.0.0
 inngest==0.4.0
+python-docx==1.1.2
+python-pptx==1.0.2
+anthropic==0.34.2
+Pillow==10.4.0
