@@ -35,25 +35,36 @@ const acceptedMimeTypes = {
 function inferKnownDimensions(messages: Message[], outputs: GeneratedOutputs) {
   const writerText = messages
     .filter((m) => m.role === 'writer')
-    .map((m) => m.content.toLowerCase())
+    .map((m) => m.content)
     .join('\n')
 
+  const audiencePattern = new RegExp(
+    '(teen|young adult|adult|family|children|kids|teenager|everyone|universal|women|men|male|female|urban|rural|metros)',
+    'i'
+  )
+  const themesPattern = new RegExp(
+    '(theme|identity|love|grief|revenge|class|faith|justice|family|friendship|belonging|loss|power|freedom|survival|loyalty|betrayal|redemption)',
+    'i'
+  )
+  const characterPattern = new RegExp(
+    '(protagonist|hero|anti-hero|villain|antagonist|character|arjun|raj|priya|drives|motivation|wants|seeks|fears|arc|journey)',
+    'i'
+  )
+  const worldPattern = new RegExp(
+    '(world|setting|city|village|future|past|fantasy|realistic|mythic|mumbai|delhi|india|school|college|urban|rural|period|contemporary|modern)',
+    'i'
+  )
+  const stakesPattern = new RegExp(
+    '(lose|risk|stakes|consequence|fail|death|survive|afraid|scared|threatens|danger|cost|price)',
+    'i'
+  )
+
   return {
-    audience: /(teen|young adult|adult|family|children|kids)/.test(writerText)
-      ? 'partially-defined'
-      : '',
-    themes: /(theme|identity|love|grief|revenge|class|faith|justice|family)/.test(writerText)
-      ? 'partially-defined'
-      : '',
-    character: /(protagonist|hero|anti-hero|villain|antagonist|character)/.test(writerText)
-      ? 'partially-defined'
-      : '',
-    world: /(world|setting|city|village|future|past|fantasy|realistic|mythic)/.test(writerText)
-      ? 'partially-defined'
-      : '',
-    stakes: /(lose|risk|stakes|consequence|fail|death|survive)/.test(writerText)
-      ? 'partially-defined'
-      : '',
+    audience: audiencePattern.test(writerText) ? 'partially-defined' : '',
+    themes: themesPattern.test(writerText) ? 'partially-defined' : '',
+    character: characterPattern.test(writerText) ? 'partially-defined' : '',
+    world: worldPattern.test(writerText) ? 'partially-defined' : '',
+    stakes: stakesPattern.test(writerText) ? 'partially-defined' : '',
     outputsReady: Boolean(outputs.logline || outputs.synopsis),
   }
 }
@@ -458,7 +469,11 @@ export function WriterConversationExperience() {
         content: messageText || 'Uploaded reference files for context.',
       }
       const updatedMessages = [...messages, userMessage]
-      setMessages(updatedMessages)
+      setMessages((prev) => {
+        const last = prev[prev.length - 1]
+        if (last?.role === userMessage.role && last?.content === userMessage.content) return prev
+        return [...prev, userMessage]
+      })
 
       const combinedMaterial = [
         storyMaterial,
@@ -475,19 +490,26 @@ export function WriterConversationExperience() {
       const docId = await ensureWorkingDocument(combinedMaterial || userMessage.content)
       await updateWorkingDocumentText(docId, combinedMaterial || userMessage.content)
       if (turn.ready) {
-        setMessages((prev) => [
-          ...prev,
-          { role: 'manthan', content: turn.summary || 'Great. I have enough to start generating your story package.' },
-        ])
+        const assistantMessage = {
+          role: 'manthan' as const,
+          content: turn.summary || 'Great. I have enough to start generating your story package.',
+        }
+        setMessages((prev) => {
+          const last = prev[prev.length - 1]
+          if (last?.role === assistantMessage.role && last?.content === assistantMessage.content) return prev
+          return [...prev, assistantMessage]
+        })
         await generateOutputs(docId)
       } else {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: 'manthan',
-            content: turn.question || 'What should your audience feel by the final scene?',
-          },
-        ])
+        const assistantMessage = {
+          role: 'manthan' as const,
+          content: turn.question || 'What should your audience feel by the final scene?',
+        }
+        setMessages((prev) => {
+          const last = prev[prev.length - 1]
+          if (last?.role === assistantMessage.role && last?.content === assistantMessage.content) return prev
+          return [...prev, assistantMessage]
+        })
       }
 
       setDraft('')
