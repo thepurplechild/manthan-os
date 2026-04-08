@@ -28,6 +28,38 @@ export default async function ProjectsPage() {
   }
 
   const projectsList = (projects || []) as Project[];
+  const projectIds = projectsList.map((project) => project.id);
+
+  const { data: documents } = projectIds.length > 0
+    ? await supabase
+        .from('documents')
+        .select('id, project_id')
+        .in('project_id', projectIds)
+    : { data: [] as Array<{ id: string; project_id: string }> };
+
+  const documentIds = (documents || []).map((document) => document.id);
+
+  const { data: generatedOutputs } = documentIds.length > 0
+    ? await supabase
+        .from('script_analysis_outputs')
+        .select('document_id')
+        .in('document_id', documentIds)
+        .eq('status', 'GENERATED')
+    : { data: [] as Array<{ document_id: string }> };
+
+  const documentToProjectMap = new Map((documents || []).map((document) => [document.id, document.project_id]));
+  const fileCountsByProject = new Map<string, number>();
+  const outputCountsByProject = new Map<string, number>();
+
+  for (const document of documents || []) {
+    fileCountsByProject.set(document.project_id, (fileCountsByProject.get(document.project_id) || 0) + 1);
+  }
+
+  for (const output of generatedOutputs || []) {
+    const projectId = documentToProjectMap.get(output.document_id);
+    if (!projectId) continue;
+    outputCountsByProject.set(projectId, (outputCountsByProject.get(projectId) || 0) + 1);
+  }
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -71,6 +103,8 @@ export default async function ProjectsPage() {
             <ProjectCard
               key={project.id}
               project={project}
+              fileCount={fileCountsByProject.get(project.id) || 0}
+              generatedOutputCount={outputCountsByProject.get(project.id) || 0}
             />
           ))}
         </div>

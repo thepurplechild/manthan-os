@@ -12,11 +12,18 @@ import { DeleteProjectButton } from './DeleteProjectButton';
 
 interface ProjectCardProps {
   project: Project;
+  fileCount: number;
+  generatedOutputCount: number;
 }
 
-export function ProjectCard({ project }: ProjectCardProps) {
+export function ProjectCard({ project, fileCount, generatedOutputCount }: ProjectCardProps) {
   const totalAssets = getTotalAssetCount(project.asset_counts);
   const assetEntries = project.asset_counts ? Object.entries(project.asset_counts) : [];
+  const subtitle = generatedOutputCount > 0
+    ? 'Story package ready'
+    : fileCount > 0
+      ? `${fileCount} ${fileCount === 1 ? 'file' : 'files'}`
+      : 'In development';
 
   return (
     <Card className="group hover:shadow-lg transition-all duration-200 overflow-hidden">
@@ -60,6 +67,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
                 {project.description}
               </CardDescription>
             )}
+            <CardDescription className="mt-2">{subtitle}</CardDescription>
           </div>
 
           <div className="opacity-0 group-hover:opacity-100 transition-opacity">
