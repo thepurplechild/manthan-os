@@ -78,6 +78,7 @@ export function WriterConversationExperience() {
   const [workingDocumentId, setWorkingDocumentId] = useState<string | null>(null)
   const [storyMaterial, setStoryMaterial] = useState('')
   const [thinking, setThinking] = useState(false)
+  const [readingFiles, setReadingFiles] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [saveInFlight, setSaveInFlight] = useState(false)
   const [outputs, setOutputs] = useState<GeneratedOutputs>({})
@@ -231,6 +232,52 @@ export function WriterConversationExperience() {
       console.error('updateWorkingDocumentText failure:', { documentId, error })
       throw new Error(error.message || 'Failed updating working document')
     }
+  }
+
+  const waitForExtraction = async (docId: string, maxWaitMs = 15000): Promise<string> => {
+    const pollClient = createClient()
+    const startTime = Date.now()
+
+    while (Date.now() - startTime < maxWaitMs) {
+      const { data } = await pollClient
+        .from('documents')
+        .select('extracted_text, processing_status')
+        .eq('id', docId)
+        .single()
+
+      if (data?.extracted_text) return data.extracted_text
+      if (data?.processing_status === 'EXTRACTION_FAILED') return ''
+
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+    }
+
+    return ''
+  }
+
+  const fetchExtractedTexts = async (docIds: string[]) => {
+    if (docIds.length === 0) return ''
+
+    const readerClient = createClient()
+    const { data } = await readerClient
+      .from('documents')
+      .select('id, title, extracted_text, processing_status')
+      .in('id', docIds)
+
+    if (!data) return ''
+
+    const resolved = await Promise.all(
+      data.map(async (document) => {
+        if (document.extracted_text) return document
+        if (document.processing_status === 'EXTRACTION_FAILED') return document
+        const extractedText = await waitForExtraction(document.id)
+        return { ...document, extracted_text: extractedText }
+      })
+    )
+
+    return resolved
+      .filter((document) => document.extracted_text)
+      .map((document) => `[Document: ${document.title}]\n${document.extracted_text}`)
+      .join('\n\n---\n\n')
   }
 
   const generateOutputs = async (documentId: string) => {
@@ -402,6 +449,9 @@ export function WriterConversationExperience() {
       if (newFileIds.length > 0) {
         setUploadedFileIds((prev) => [...prev, ...newFileIds])
       }
+      setReadingFiles(newFileIds.length > 0)
+      const extractedTexts = await fetchExtractedTexts(newFileIds)
+      setReadingFiles(false)
 
       const userMessage: Message = {
         role: 'writer',
@@ -410,7 +460,12 @@ export function WriterConversationExperience() {
       const updatedMessages = [...messages, userMessage]
       setMessages(updatedMessages)
 
-      const combinedMaterial = [storyMaterial, messageText, filesToUpload.map((f) => `[Attachment] ${f.name}`).join('\n')]
+      const combinedMaterial = [
+        storyMaterial,
+        messageText,
+        extractedTexts,
+        filesToUpload.map((f) => `[Attachment] ${f.name}`).join('\n'),
+      ]
         .filter(Boolean)
         .join('\n\n')
       setStoryMaterial(combinedMaterial)
@@ -441,6 +496,7 @@ export function WriterConversationExperience() {
       console.error('sendConversationTurn failure:', error)
       setConversationError(buildConversationErrorMessage(error))
     } finally {
+      setReadingFiles(false)
       setThinking(false)
     }
   }
@@ -592,6 +648,11 @@ export function WriterConversationExperience() {
                   </Badge>
                 ))}
               </div>
+              {readingFiles && (
+                <div className="mt-2 text-[#C8A97E] text-xs animate-pulse">
+                  Reading your files...
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
