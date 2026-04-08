@@ -46,46 +46,38 @@ def download_from_signed_url(storage_url: str) -> bytes:
     response.raise_for_status()
     return response.content
 
-def _get_extension_from_url(storage_url: str) -> str:
-    path = urlparse(storage_url).path.lower()
-    if "." not in path:
-        return ""
-    return path.rsplit(".", 1)[-1]
+def route_extraction(file_bytes: bytes, mime_type: str = None, filename: str = "") -> str:
+    mime = (mime_type or "").lower()
+    ext = filename.rsplit(".", 1)[-1].lower() if filename and "." in filename else ""
 
-def _extract_with_router(file_data: bytes, mime_type: str = None, storage_url: str = "") -> str:
-    mime = (mime_type or "").lower().strip()
-    ext = _get_extension_from_url(storage_url)
+    logger.info(f"Extractor routing: mime_type={mime or 'unknown'}, filename={filename or 'unknown'}, extension={ext or 'unknown'}")
 
-    logger.info(f"Extractor routing: mime_type={mime or 'unknown'}, extension={ext or 'unknown'}")
-
-    # PDF
     if mime == "application/pdf" or ext == "pdf":
-        return extract_text_from_pdf(file_data)
+        return extract_text_from_pdf(file_bytes)
 
-    # DOCX / DOC (best effort via python-docx)
-    if mime in (
+    elif mime in (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/msword",
     ) or ext in ("docx", "doc"):
-        return extract_docx(file_data)
+        return extract_docx(file_bytes)
 
-    # PPTX / PPT (best effort via python-pptx)
-    if mime == "application/vnd.openxmlformats-officedocument.presentationml.presentation" or ext in ("pptx", "ppt"):
-        return extract_pptx(file_data)
+    elif mime in (
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.ms-powerpoint",
+    ) or ext in ("pptx", "ppt"):
+        return extract_pptx(file_bytes)
 
-    # Images
-    if mime in ("image/jpeg", "image/png", "image/webp") or ext in ("jpg", "jpeg", "png", "webp"):
-        return extract_image(file_data)
+    elif mime.startswith("image/") or ext in ("jpg", "jpeg", "png", "webp", "gif"):
+        return extract_image(file_bytes, mime_type or "image/jpeg")
 
-    # Plain text / markdown
-    if mime in ("text/plain", "text/markdown") or ext in ("txt", "md", "markdown"):
-        return extract_text(file_data)
+    elif mime in ("text/plain", "text/markdown") or ext in ("txt", "md"):
+        return extract_text(file_bytes)
 
-    # Unknown -> PDF fallback
-    logger.warning(
-        f"Unknown mime_type/extension (mime={mime or 'n/a'}, ext={ext or 'n/a'}). Falling back to PDF extractor."
-    )
-    return extract_text_from_pdf(file_data)
+    else:
+        try:
+            return extract_text_from_pdf(file_bytes)
+        except Exception:
+            return extract_text(file_bytes)
 
 def _update_extraction_failed(document_id: str, error_message: str) -> None:
     # Try storing descriptive error message if supported by DB schema.
@@ -106,7 +98,7 @@ def _update_extraction_failed(document_id: str, error_message: str) -> None:
         {"processing_status": "EXTRACTION_FAILED"},
     )
 
-def extract_document_text(document_id: str, storage_url: str, mime_type: str = None) -> Dict[str, Any]:
+def extract_document_text(document_id: str, storage_url: str, mime_type: str = None, filename: str = None) -> Dict[str, Any]:
     """Extract text from uploaded files (PDF/DOCX/PPTX/image/text)."""
     try:
         # Trim any whitespace from document_id
@@ -129,8 +121,13 @@ def extract_document_text(document_id: str, storage_url: str, mime_type: str = N
         logger.info(f"Downloading file from signed URL")
         file_data = download_from_signed_url(storage_url)
 
+        resolved_filename = filename
+        if not resolved_filename:
+            parsed_path = urlparse(storage_url).path
+            resolved_filename = parsed_path.rsplit("/", 1)[-1] if parsed_path else ""
+
         # Extract text using format router
-        extracted_text = _extract_with_router(file_data, mime_type=mime_type, storage_url=storage_url)
+        extracted_text = route_extraction(file_data, mime_type=mime_type, filename=resolved_filename)
         logger.info(f"Extracted {len(extracted_text)} characters")
 
         # Update document with extracted text

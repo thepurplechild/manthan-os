@@ -84,12 +84,13 @@ def extract():
         document_id = data.get("documentId")
         storage_url = data.get("storageUrl")
         mime_type = data.get("mime_type") or data.get("mimeType")
+        filename = data.get("filename")
 
         if not document_id or not storage_url:
             return jsonify({"error": "Missing documentId or storageUrl"}), 400
 
         logger.info(f"Extraction request for document {document_id}")
-        result = extract_document_text(document_id, storage_url, mime_type)
+        result = extract_document_text(document_id, storage_url, mime_type, filename)
 
         status_code = 200 if result.get("success") else 500
         return jsonify(result), status_code
