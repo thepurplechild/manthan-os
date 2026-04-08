@@ -1,218 +1,126 @@
-import { createClient } from '@/lib/supabase/server';
-import { redirect, notFound } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { ArrowLeft, Upload, Sparkles } from 'lucide-react';
-import Link from 'next/link';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ASSET_TYPE_COLORS, ASSET_TYPE_LABELS, formatFileSize, getTotalAssetCount } from '@/lib/types/projects';
-import type { Project } from '@/lib/types/projects';
-import { DeleteProjectButton } from '@/components/projects/DeleteProjectButton';
-import { ConceptGenerator } from '@/components/ai/ConceptGenerator';
-import { AssetGallery } from '@/components/AssetGallery';
-import { ProjectStoryPackageTab } from '@/components/projects/ProjectStoryPackageTab';
+import { createClient } from '@/lib/supabase/server'
+import { notFound, redirect } from 'next/navigation'
+import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
+import { revalidatePath } from 'next/cache'
+import { AssetPanel } from '@/components/brain/AssetPanel'
+import { BrainPanel } from '@/components/brain/BrainPanel'
+import { StoryPackagePanel } from '@/components/brain/StoryPackagePanel'
 
 interface ProjectPageProps {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string }>
 }
 
 export default async function ProjectPage({ params }: ProjectPageProps) {
-  const { id } = await params;
-  const supabase = await createClient();
+  const { id } = await params
+  const supabase = await createClient()
 
-  // Get current user
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    redirect('/login');
+    redirect('/login')
   }
 
-  // Fetch project
   const { data: project, error: projectError } = await supabase
     .from('projects')
-    .select('*')
+    .select('id, title, description')
     .eq('id', id)
     .eq('owner_id', user.id)
-    .single();
+    .single()
 
   if (projectError || !project) {
-    notFound();
+    notFound()
   }
 
-  const projectData = project as Project;
-
-  // Fetch project documents
-  const { data: documents } = await supabase
+  const { data: assets } = await supabase
     .from('documents')
+    .select('id, title, asset_type, processing_status, file_size_bytes, created_at')
+    .eq('project_id', id)
+    .eq('owner_id', user.id)
+    .order('created_at', { ascending: false })
+
+  const { data: documentsForIds } = await supabase
+    .from('documents')
+    .select('id')
+    .eq('project_id', id)
+    .eq('owner_id', user.id)
+
+  const documentIds = (documentsForIds || []).map((doc) => doc.id)
+
+  const { data: brain } = await supabase
+    .from('project_brain')
     .select('*')
     .eq('project_id', id)
-    .order('created_at', { ascending: false });
+    .single()
 
-  const projectDocumentIds = (documents || []).map((doc) => doc.id);
+  const { data: suggestions } = await supabase
+    .from('project_suggestions')
+    .select('id, suggestion_type, title, body, options, status')
+    .eq('project_id', id)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
 
-  const { data: outputs } = projectDocumentIds.length > 0
-    ? await supabase
-        .from('script_analysis_outputs')
-        .select('*')
-        .in('document_id', projectDocumentIds)
-        .eq('status', 'GENERATED')
-        .order('created_at', { ascending: false })
-    : { data: [] as Array<Record<string, unknown>> };
+  const { data: messages } = await supabase
+    .from('project_brain_messages')
+    .select('id, role, content, message_type, created_at')
+    .eq('project_id', id)
+    .order('created_at', { ascending: true })
+    .limit(50)
 
-  const latestOutputsByType = (outputs || []).reduce<Record<string, Record<string, unknown>>>((acc, output) => {
-    const outputType = String(output.output_type || '');
-    if (!outputType || acc[outputType]) return acc;
-    acc[outputType] = output;
-    return acc;
-  }, {});
-
-  const loglineRaw = latestOutputsByType.LOGLINES?.content;
-  const logline =
-    typeof loglineRaw === 'string'
-      ? loglineRaw
-      : Array.isArray((loglineRaw as { loglines?: unknown[] })?.loglines)
-        ? String(
-            ((loglineRaw as { loglines?: Array<{ text?: string }> }).loglines || []).find((item) => item?.text)?.text || ''
-          ) || null
-        : null;
-
-  const synopsisRaw = latestOutputsByType.SYNOPSIS?.content as
-    | string
-    | { long?: string; short?: string; tweet?: string }
-    | undefined;
-  const synopsis =
-    typeof synopsisRaw === 'string' ? synopsisRaw : synopsisRaw?.long || synopsisRaw?.short || synopsisRaw?.tweet || null;
-
-  const storyPackageOutputs = {
-    logline,
-    synopsis,
-    genreTone: (latestOutputsByType.GENRE_CLASSIFICATION?.content as Record<string, unknown> | undefined) || null,
-    characterBreakdown: latestOutputsByType.CHARACTER_BIBLE?.content ?? null,
-    onePager: latestOutputsByType.ONE_PAGER?.content ?? null,
-  };
-
-  const generatedOutputTypes = Object.keys(latestOutputsByType);
+  async function onAssetAdded() {
+    'use server'
+    revalidatePath(`/dashboard/projects/${id}`)
+  }
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-[#E5E5E5]">
-      <div className="container mx-auto py-8 px-4">
-      {/* Header */}
-      <div className="mb-8">
-        <Button variant="ghost" asChild className="mb-4 text-[#C8A97E] hover:bg-transparent hover:text-[#d8ba90]">
-          <Link href="/dashboard/projects">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Projects
-          </Link>
-        </Button>
-
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold">{projectData.title}</h1>
-            {projectData.description && (
-              <p className="text-[#A3A3A3] mt-2">{projectData.description}</p>
-            )}
-
-            {/* Asset counts */}
-            <div className="flex flex-wrap gap-2 mt-4">
-              {projectData.asset_counts && Object.entries(projectData.asset_counts).map(([type, count]) => (
-                <Badge
-                  key={type}
-                  className={`${ASSET_TYPE_COLORS[type]} text-white`}
-                >
-                  {ASSET_TYPE_LABELS[type]}: {count}
-                </Badge>
-              ))}
-            </div>
-
-            <p className="text-sm text-[#A3A3A3] mt-4">
-              Total size: {formatFileSize(projectData.total_size_bytes)}
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            <DeleteProjectButton
-              projectId={id}
-              projectTitle={projectData.title}
-              assetCount={getTotalAssetCount(projectData.asset_counts)}
-            />
-            <Button asChild className="bg-[#C8A97E] text-black hover:bg-[#b8976a]">
-              <Link href={`/dashboard/projects/${id}/upload`}>
-                <Upload className="h-4 w-4 mr-2" />
-                Upload Assets
-              </Link>
-            </Button>
-          </div>
-        </div>
+      <div className="px-6 py-5 border-b border-[#1A1A1A]">
+        <Link href="/dashboard/projects" className="inline-flex items-center text-sm text-[#C8A97E] hover:text-[#E5E5E5]">
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Projects
+        </Link>
+        <h1 className="mt-3 text-3xl font-light text-[#E5E5E5]">{project.title}</h1>
+        {project.description && <p className="mt-1 text-sm text-[#666666]">{project.description}</p>}
       </div>
 
-      {/* Tabs for Assets, Story Package, and AI Generator */}
-      <Tabs defaultValue="assets" className="space-y-4">
-        <TabsList className="bg-[#111111] border border-[#1E1E1E]">
-          <TabsTrigger value="assets">Assets</TabsTrigger>
-          <TabsTrigger value="story-package">Story Package</TabsTrigger>
-          <TabsTrigger value="ai-generator">
-            <Sparkles className="h-4 w-4 mr-2" />
-            AI Generator
-          </TabsTrigger>
-        </TabsList>
+      <div className="flex h-[calc(100vh-10rem)] bg-[#0A0A0A] overflow-hidden flex-col lg:flex-row">
+        <div className="w-full lg:w-64 flex-shrink-0 border-r border-[#1A1A1A] overflow-y-auto">
+          <AssetPanel projectId={project.id} assets={assets || []} onAssetAdded={onAssetAdded} />
+        </div>
 
-        <TabsContent value="assets">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Assets ({documents?.length || 0})</h2>
-              <Button asChild variant="outline" className="border-[#2A2A2A] bg-[#111111] hover:bg-[#171717]">
-                <Link href={`/dashboard/projects/${id}/upload`}>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Assets
-                </Link>
-              </Button>
-            </div>
+        <div className="flex-1 overflow-hidden">
+          <BrainPanel
+            projectId={project.id}
+            initialBrain={(brain as {
+              story_summary: string
+              known_dimensions: Record<string, string>
+              identified_gaps: string[]
+              contradictions: unknown[]
+              synthesised_context: string
+              last_analysed_at: string
+            } | null) || null}
+            initialSuggestions={(suggestions as Array<{
+              id: string
+              suggestion_type: string
+              title: string
+              body: string
+              options: string[]
+              status: string
+            }>) || []}
+            initialMessages={(messages as Array<{
+              id: string
+              role: string
+              content: string
+              message_type: string
+              created_at: string
+            }>) || []}
+          />
+        </div>
 
-            {!documents || documents.length === 0 ? (
-              <div className="text-center py-12 border-2 border-dashed border-[#2A2A2A] rounded-lg bg-[#111111]">
-                <p className="text-[#A3A3A3] mb-4">No assets yet</p>
-                <Button asChild className="bg-[#C8A97E] text-black hover:bg-[#b8976a]">
-                  <Link href={`/dashboard/projects/${id}/upload`}>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload First Asset
-                  </Link>
-                </Button>
-              </div>
-            ) : (
-              <AssetGallery
-                assets={documents.map(doc => ({
-                  id: doc.id,
-                  title: doc.title,
-                  asset_type: doc.asset_type,
-                  storage_url: doc.storage_url,
-                  mime_type: doc.mime_type || '',
-                  file_size_bytes: doc.file_size_bytes,
-                  asset_metadata: doc.asset_metadata || {},
-                  created_at: doc.created_at
-                }))}
-              />
-            )}
-
-            <div className="rounded-xl border border-[#1E1E1E] bg-[#111111] p-4">
-              <h3 className="text-lg font-semibold text-[#E5E5E5]">Generated Story Package</h3>
-              <p className="mt-2 text-sm text-[#A3A3A3]">
-                {generatedOutputTypes.length > 0
-                  ? `${generatedOutputTypes.length} generated sections ready. Open the Story Package tab to review the full package.`
-                  : 'No generated outputs yet. Use AI Generator or continue developing the story to generate package sections.'}
-              </p>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="story-package">
-          <ProjectStoryPackageTab projectId={id} outputs={storyPackageOutputs} />
-        </TabsContent>
-
-        <TabsContent value="ai-generator">
-          <ConceptGenerator projectId={id} />
-        </TabsContent>
-      </Tabs>
+        <div className="w-full lg:w-80 flex-shrink-0 border-l border-[#1A1A1A] overflow-y-auto">
+          <StoryPackagePanel projectId={project.id} documentIds={documentIds} />
+        </div>
+      </div>
     </div>
-    </div>
-  );
+  )
 }
