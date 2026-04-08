@@ -9,12 +9,13 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Copy, Sparkles, Upload } from 'lucide-react'
+import { Sparkles, Upload } from 'lucide-react'
 import { saveStoryProject, type Message, type GeneratedOutputs } from '@/app/actions/conversation'
 import { generateLoglines } from '@/app/actions/loglines'
 import { generateSynopsis } from '@/app/actions/synopsis'
 import { generateCharacterBible } from '@/app/actions/characterBible'
 import { generateOnePager } from '@/app/actions/onePager'
+import { LoglineCard, SynopsisCard, GenreToneCard, CharacterCard, OnePagerCard } from './OutputCards'
 
 type OutputKey = 'logline' | 'genreTone' | 'characterBreakdown' | 'synopsis' | 'onePager'
 
@@ -81,6 +82,7 @@ export function WriterConversationExperience() {
   const [outputs, setOutputs] = useState<GeneratedOutputs>({})
   const [conversationError, setConversationError] = useState<string | null>(null)
   const [lastMessageForRetry, setLastMessageForRetry] = useState<string>('')
+  const [refiningType, setRefiningType] = useState<OutputKey | null>(null)
 
   const knownDimensions = useMemo(() => inferKnownDimensions(messages, outputs), [messages, outputs])
 
@@ -473,41 +475,53 @@ export function WriterConversationExperience() {
     setPendingFiles((prev) => [...prev, ...acceptedFiles])
   }
 
+  const handleRefineOutput = async (type: OutputKey, note: string) => {
+    const trimmed = note.trim()
+    if (!trimmed) return
+    setRefiningType(type)
+    try {
+      const labelMap: Record<OutputKey, string> = {
+        logline: 'logline',
+        genreTone: 'genre and tone',
+        characterBreakdown: 'character breakdown',
+        synopsis: 'synopsis',
+        onePager: 'one-pager',
+      }
+      const refineMessage: Message = {
+        role: 'writer',
+        content: `Please refine the ${labelMap[type]}: ${trimmed}`,
+      }
+      const updatedMessages = [...messages, refineMessage]
+      const combinedMaterial = [storyMaterial, refineMessage.content].filter(Boolean).join('\n\n')
+
+      setMessages(updatedMessages)
+      setStoryMaterial(combinedMaterial)
+
+      const turn = await requestTurnWithRetry(updatedMessages, combinedMaterial)
+      if (turn.ready) {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'manthan', content: turn.summary || 'Great. I have enough to refine this output.' },
+        ])
+      } else if (turn.question) {
+        setMessages((prev) => [...prev, { role: 'manthan', content: turn.question || 'Could you tell me more?' }])
+      }
+
+      await handleRegenerate(type)
+      toast.success('Refinement applied')
+    } catch (error) {
+      console.error('handleRefineOutput failure:', { type, error })
+      toast.error('Could not refine output. Please retry.')
+    } finally {
+      setRefiningType(null)
+    }
+  }
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     multiple: true,
     accept: acceptedMimeTypes,
   })
-
-  const outputCards = [
-    {
-      key: 'logline' as const,
-      title: 'LOGLINE',
-      content: outputs.logline || '',
-    },
-    {
-      key: 'genreTone' as const,
-      title: 'GENRE + TONE',
-      content: outputs.genreTone
-        ? `${outputs.genreTone.primaryGenre || ''}\n${(outputs.genreTone.subGenres || []).join(', ')}\n${(outputs.genreTone.tone || []).join(', ')}`
-        : '',
-    },
-    {
-      key: 'characterBreakdown' as const,
-      title: 'CHARACTER BREAKDOWN',
-      content: outputs.characterBreakdown ? JSON.stringify(outputs.characterBreakdown, null, 2) : '',
-    },
-    {
-      key: 'synopsis' as const,
-      title: 'SYNOPSIS',
-      content: outputs.synopsis || '',
-    },
-    {
-      key: 'onePager' as const,
-      title: 'ONE-PAGER',
-      content: outputs.onePager ? JSON.stringify(outputs.onePager, null, 2) : '',
-    },
-  ]
 
   return (
     <div className="min-h-[calc(100vh-7rem)] bg-[#0A0A0A] p-6 md:p-8">
@@ -645,35 +659,50 @@ export function WriterConversationExperience() {
             )}
           </div>
 
-          {outputCards.map((card) =>
-            card.content ? (
-              <div key={card.key} className="rounded-[8px] border border-[#1E1E1E] bg-[#111111] p-4 space-y-3">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-[#C8A97E]">{card.title}</div>
-                <pre className="whitespace-pre-wrap text-sm leading-7 text-[#E5E5E5] font-sans">{card.content}</pre>
-                <div className="flex gap-4">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-auto p-0 text-[#666666] hover:text-[#C8A97E] hover:bg-transparent"
-                    onClick={() => handleRegenerate(card.key)}
-                  >
-                    Regenerate
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-auto p-0 text-[#666666] hover:text-[#C8A97E] hover:bg-transparent"
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(card.content)
-                      toast.success('Copied')
-                    }}
-                  >
-                    <Copy className="h-4 w-4 mr-1" />
-                    Copy
-                  </Button>
-                </div>
-              </div>
-            ) : null
+          {outputs.logline && (
+            <LoglineCard
+              title="LOGLINE"
+              content={outputs.logline}
+              onRegenerate={() => handleRegenerate('logline')}
+              onRefine={(note) => handleRefineOutput('logline', note)}
+              isRefining={refiningType === 'logline'}
+            />
+          )}
+          {outputs.genreTone && (
+            <GenreToneCard
+              title="GENRE + TONE"
+              content={outputs.genreTone}
+              onRegenerate={() => handleRegenerate('genreTone')}
+              onRefine={(note) => handleRefineOutput('genreTone', note)}
+              isRefining={refiningType === 'genreTone'}
+            />
+          )}
+          {outputs.characterBreakdown && (
+            <CharacterCard
+              title="CHARACTER BREAKDOWN"
+              content={outputs.characterBreakdown}
+              onRegenerate={() => handleRegenerate('characterBreakdown')}
+              onRefine={(note) => handleRefineOutput('characterBreakdown', note)}
+              isRefining={refiningType === 'characterBreakdown'}
+            />
+          )}
+          {outputs.synopsis && (
+            <SynopsisCard
+              title="SYNOPSIS"
+              content={outputs.synopsis}
+              onRegenerate={() => handleRegenerate('synopsis')}
+              onRefine={(note) => handleRefineOutput('synopsis', note)}
+              isRefining={refiningType === 'synopsis'}
+            />
+          )}
+          {outputs.onePager && (
+            <OnePagerCard
+              title="ONE-PAGER"
+              content={outputs.onePager}
+              onRegenerate={() => handleRegenerate('onePager')}
+              onRefine={(note) => handleRefineOutput('onePager', note)}
+              isRefining={refiningType === 'onePager'}
+            />
           )}
         </div>
       </div>
