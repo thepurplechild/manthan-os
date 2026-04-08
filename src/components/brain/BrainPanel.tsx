@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -48,7 +48,7 @@ export function BrainPanel({ projectId, initialBrain, initialSuggestions, initia
   const [thinking, setThinking] = useState(false)
   const [analysing, setAnalysing] = useState(false)
 
-  const triggerAnalysis = async () => {
+  const triggerAnalysis = useCallback(async () => {
     setAnalysing(true)
     try {
       const res = await fetch('/api/brain/analyse', {
@@ -62,7 +62,7 @@ export function BrainPanel({ projectId, initialBrain, initialSuggestions, initia
     } finally {
       setAnalysing(false)
     }
-  }
+  }, [projectId])
 
   useEffect(() => {
     const staleMs = 15 * 60 * 1000
@@ -70,7 +70,19 @@ export function BrainPanel({ projectId, initialBrain, initialSuggestions, initia
     if (!brain || isStale) {
       void triggerAnalysis()
     }
-  }, [])
+  }, [brain, triggerAnalysis])
+
+  useEffect(() => {
+    const onBrainUpdated = () => {
+      void triggerAnalysis()
+    }
+    window.addEventListener('manthan-brain-updated', onBrainUpdated)
+    window.addEventListener('manthan-brain-reanalyse', onBrainUpdated)
+    return () => {
+      window.removeEventListener('manthan-brain-updated', onBrainUpdated)
+      window.removeEventListener('manthan-brain-reanalyse', onBrainUpdated)
+    }
+  }, [triggerAnalysis])
 
   const dimensions = useMemo(
     () => [

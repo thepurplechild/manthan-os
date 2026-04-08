@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDropzone } from 'react-dropzone'
 import { createClient } from '@/lib/supabase/client'
@@ -78,7 +78,11 @@ function makeProjectTitle(firstWriterMessage?: string) {
     .join(' ')
 }
 
-export function WriterConversationExperience() {
+interface WriterConversationExperienceProps {
+  projectId?: string
+}
+
+export function WriterConversationExperience({ projectId }: WriterConversationExperienceProps) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -96,8 +100,36 @@ export function WriterConversationExperience() {
   const [conversationError, setConversationError] = useState<string | null>(null)
   const [lastMessageForRetry, setLastMessageForRetry] = useState<string>('')
   const [refiningType, setRefiningType] = useState<RefiningType | null>(null)
+  const [projectTitle, setProjectTitle] = useState<string>('')
 
   const knownDimensions = useMemo(() => inferKnownDimensions(messages, outputs), [messages, outputs])
+
+  useEffect(() => {
+    const bootstrapProjectContext = async () => {
+      if (!projectId) return
+      const { data: project } = await supabase
+        .from('projects')
+        .select('title')
+        .eq('id', projectId)
+        .single()
+
+      const { data: brain } = await supabase
+        .from('project_brain')
+        .select('synthesised_context')
+        .eq('project_id', projectId)
+        .single()
+
+      if (project?.title) setProjectTitle(project.title)
+      if (brain?.synthesised_context) {
+        setStoryMaterial((prev) =>
+          prev
+            ? `${brain.synthesised_context}\n\n---\n\n${prev}`
+            : brain.synthesised_context
+        )
+      }
+    }
+    void bootstrapProjectContext()
+  }, [projectId])
 
   const dimensionProgress = useMemo(() => {
     const fields = ['audience', 'themes', 'character', 'world', 'stakes'] as const
@@ -209,6 +241,7 @@ export function WriterConversationExperience() {
       .from('documents')
       .insert({
         owner_id: user.id,
+        project_id: projectId || null,
         title: 'New Story Session',
         storage_url: `conversation://${storagePath}`,
         storage_path: storagePath,
@@ -539,7 +572,7 @@ export function WriterConversationExperience() {
     setSaveInFlight(true)
     try {
       const title = makeProjectTitle(messages.find((m) => m.role === 'writer')?.content)
-      const result = await saveStoryProject(title, messages, outputs, uploadedFileIds)
+      const result = await saveStoryProject(title, messages, outputs, uploadedFileIds, projectId)
       toast.success('Project saved.')
       router.push(`/dashboard/projects/${result.projectId}`)
     } catch (error) {
@@ -600,6 +633,11 @@ export function WriterConversationExperience() {
         <div className="lg:col-span-3 space-y-4">
           <div>
             <div className="text-[#C8A97E] text-xs tracking-[0.22em] uppercase">Manthan OS</div>
+            {projectId && projectTitle && (
+              <div className="mt-1 text-[#C8A97E] text-xs tracking-[0.12em] uppercase">
+                Continuing: {projectTitle}
+              </div>
+            )}
             <h1 className="mt-2 text-white text-[2.5rem] font-light leading-tight">New Story</h1>
           </div>
 

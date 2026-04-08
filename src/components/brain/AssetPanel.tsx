@@ -30,6 +30,31 @@ export function AssetPanel({ projectId, assets, onAssetAdded }: AssetPanelProps)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [analysing, setAnalysing] = useState(false)
+
+  const waitForExtraction = async (
+    documentId: string,
+    pollSupabase: ReturnType<typeof createClient>
+  ): Promise<boolean> => {
+    const maxWait = 30000
+    const start = Date.now()
+
+    while (Date.now() - start < maxWait) {
+      const { data } = await pollSupabase
+        .from('documents')
+        .select('processing_status, extracted_text')
+        .eq('id', documentId)
+        .single()
+
+      if (data?.extracted_text) return true
+      if (data?.processing_status === 'EXTRACTION_FAILED') {
+        return false
+      }
+
+      await new Promise((r) => setTimeout(r, 2000))
+    }
+    return false
+  }
 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return
@@ -47,6 +72,7 @@ export function AssetPanel({ projectId, assets, onAssetAdded }: AssetPanelProps)
 
       const selectedFiles = Array.from(files)
       let completed = 0
+      const uploadedDocumentIds: string[] = []
 
       for (const file of selectedFiles) {
         const ext = file.name.split('.').pop() || 'bin'
@@ -80,6 +106,7 @@ export function AssetPanel({ projectId, assets, onAssetAdded }: AssetPanelProps)
           .single()
 
         if (docError || !doc) throw new Error(docError?.message || 'Failed to create document')
+        uploadedDocumentIds.push(doc.id)
 
         await fetch('/api/inngest/trigger', {
           method: 'POST',
@@ -99,13 +126,34 @@ export function AssetPanel({ projectId, assets, onAssetAdded }: AssetPanelProps)
         setUploadProgress(Math.round((completed / selectedFiles.length) * 100))
       }
 
+      let extractedAny = false
+      let extractionFailed = false
+      for (const docId of uploadedDocumentIds) {
+        const extracted = await waitForExtraction(docId, supabase)
+        extractedAny = extractedAny || extracted
+        extractionFailed = extractionFailed || !extracted
+      }
+
+      if (extractionFailed && !extractedAny) {
+        toast.error('Could not read this file. Other assets are still available to Manthan.')
+      }
+
+      setAnalysing(true)
+      await fetch('/api/brain/analyse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId }),
+      })
+
       await onAssetAdded()
+      window.dispatchEvent(new CustomEvent('manthan-brain-updated'))
       router.refresh()
       toast.success('Asset upload complete')
     } catch (error) {
       console.error('Asset upload failed:', error)
       toast.error('Upload failed. Please retry.')
     } finally {
+      setAnalysing(false)
       setUploading(false)
       setUploadProgress(0)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -137,6 +185,9 @@ export function AssetPanel({ projectId, assets, onAssetAdded }: AssetPanelProps)
 
       {uploading && (
         <div className="text-xs text-[#C8A97E] animate-pulse">Uploading assets... {uploadProgress}%</div>
+      )}
+      {analysing && (
+        <div className="text-xs text-[#C8A97E] animate-pulse">Manthan is reading your new asset...</div>
       )}
 
       <div className="space-y-2">

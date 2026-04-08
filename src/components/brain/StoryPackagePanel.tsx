@@ -72,6 +72,22 @@ export function StoryPackagePanel({ projectId, documentIds }: StoryPackagePanelP
     }
     setRegenerating(true)
     try {
+      const { data: brain } = await supabase
+        .from('project_brain')
+        .select('synthesised_context')
+        .eq('project_id', projectId)
+        .single()
+
+      if (brain?.synthesised_context) {
+        await supabase
+          .from('documents')
+          .update({
+            extracted_text: brain.synthesised_context,
+            file_size_bytes: brain.synthesised_context.length,
+          })
+          .eq('id', primaryDocumentId)
+      }
+
       await generateLoglines(primaryDocumentId)
       await generateSynopsis(primaryDocumentId)
       await generateCharacterBible(primaryDocumentId)

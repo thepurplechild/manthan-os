@@ -225,7 +225,8 @@ export async function saveStoryProject(
   title: string,
   conversationHistory: Message[],
   outputs: GeneratedOutputs,
-  uploadedFileIds: string[]
+  uploadedFileIds: string[],
+  existingProjectId?: string
 ): Promise<{ projectId: string; documentId: string }> {
   const supabase = await createClient()
 
@@ -243,21 +244,36 @@ export async function saveStoryProject(
     .map((msg) => `${msg.role === 'writer' ? 'Writer' : 'Manthan'}: ${msg.content}`)
     .join('\n\n')
 
-  const { data: project, error: projectError } = await supabase
-    .from('projects')
-    .insert({
-      owner_id: user.id,
-      title: cleanTitle,
-      description: 'Generated from Manthan conversation engine',
-      asset_counts: {},
-      total_size_bytes: conversationText.length,
-      is_public: false,
-    })
-    .select('id')
-    .single()
+  let projectId = existingProjectId || ''
+  if (existingProjectId) {
+    const { data: existingProject, error: existingProjectError } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', existingProjectId)
+      .eq('owner_id', user.id)
+      .single()
+    if (existingProjectError || !existingProject) {
+      throw new Error(existingProjectError?.message || 'Project not found')
+    }
+    projectId = existingProject.id
+  } else {
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .insert({
+        owner_id: user.id,
+        title: cleanTitle,
+        description: 'Generated from Manthan conversation engine',
+        asset_counts: {},
+        total_size_bytes: conversationText.length,
+        is_public: false,
+      })
+      .select('id')
+      .single()
 
-  if (projectError || !project) {
-    throw new Error(projectError?.message || 'Failed to create project')
+    if (projectError || !project) {
+      throw new Error(projectError?.message || 'Failed to create project')
+    }
+    projectId = project.id
   }
 
   const storagePath = `${user.id}/conversation/${Date.now()}-story.txt`
@@ -265,7 +281,7 @@ export async function saveStoryProject(
     .from('documents')
     .insert({
       owner_id: user.id,
-      project_id: project.id,
+        project_id: projectId,
       title: cleanTitle,
       asset_type: 'SCRIPT',
       storage_url: `conversation://${storagePath}`,
@@ -348,7 +364,7 @@ export async function saveStoryProject(
     await supabase
       .from('documents')
       .update({
-        project_id: project.id,
+        project_id: projectId,
         parent_document_id: document.id,
         is_primary: false,
       })
@@ -357,10 +373,10 @@ export async function saveStoryProject(
   }
 
   revalidatePath('/dashboard/projects')
-  revalidatePath(`/dashboard/projects/${project.id}`)
+  revalidatePath(`/dashboard/projects/${projectId}`)
 
   return {
-    projectId: project.id,
+    projectId,
     documentId: document.id,
   }
 }

@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { AssetPanel } from '@/components/brain/AssetPanel'
 import { BrainPanel } from '@/components/brain/BrainPanel'
 import { StoryPackagePanel } from '@/components/brain/StoryPackagePanel'
+import { ReanalyseButton } from '@/components/brain/ReanalyseButton'
 
 interface ProjectPageProps {
   params: Promise<{ id: string }>
@@ -75,12 +76,17 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-[#E5E5E5]">
       <div className="px-6 py-5 border-b border-[#1A1A1A]">
-        <Link href="/dashboard/projects" className="inline-flex items-center text-sm text-[#C8A97E] hover:text-[#E5E5E5]">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Projects
-        </Link>
-        <h1 className="mt-3 text-3xl font-light text-[#E5E5E5]">{project.title}</h1>
-        {project.description && <p className="mt-1 text-sm text-[#666666]">{project.description}</p>}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <Link href="/dashboard/projects" className="inline-flex items-center text-sm text-[#C8A97E] hover:text-[#E5E5E5]">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Projects
+            </Link>
+            <h1 className="mt-3 text-3xl font-light text-[#E5E5E5]">{project.title}</h1>
+            {project.description && <p className="mt-1 text-sm text-[#666666]">{project.description}</p>}
+          </div>
+          <ReanalyseButton projectId={project.id} />
+        </div>
       </div>
 
       <div className="flex h-[calc(100vh-10rem)] bg-[#0A0A0A] overflow-hidden flex-col lg:flex-row">
