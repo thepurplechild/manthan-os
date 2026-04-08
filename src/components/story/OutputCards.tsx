@@ -28,9 +28,9 @@ function SectionLabel({ children }: { children: string }) {
   return <div className="text-[11px] uppercase tracking-[0.18em] text-[#C8A97E]">{children}</div>
 }
 
-function CardShell({ title, children }: { title: string; children: ReactNode }) {
+function CardShell({ title, children, isRefining }: { title: string; children: ReactNode; isRefining?: boolean }) {
   return (
-    <div className="rounded-[8px] border border-[#1E1E1E] bg-[#111111] p-4 space-y-4">
+    <div className={`rounded-[8px] border border-[#1E1E1E] bg-[#111111] p-4 space-y-4 ${isRefining ? 'animate-pulse' : ''}`}>
       <SectionLabel>{title}</SectionLabel>
       {children}
     </div>
@@ -71,7 +71,13 @@ function ActionRow({
   )
 }
 
-function RefineRow({ onRefine, isRefining }: RefineProps) {
+function RefineRow({
+  onRefine,
+  isRefining,
+  placeholder,
+}: RefineProps & {
+  placeholder: string
+}) {
   const [note, setNote] = useState('')
 
   const submit = async () => {
@@ -83,10 +89,11 @@ function RefineRow({ onRefine, isRefining }: RefineProps) {
 
   return (
     <div className="space-y-2">
+      <div className="text-xs text-[#888888]">Refine note (applies to entire story package)</div>
       <Textarea
         value={note}
         onChange={(e) => setNote(e.target.value)}
-        placeholder="e.g. make the tone darker, add more conflict, the protagonist is actually a woman..."
+        placeholder={placeholder}
         className="min-h-20 rounded-[8px] border-[#2A2A2A] bg-[#0A0A0A] text-white placeholder:text-[#666666] focus-visible:ring-0 focus-visible:border-[#C8A97E]/50"
       />
       <Button
@@ -124,20 +131,28 @@ export function formatOnePagerAsText(content: unknown): string {
 
 export function LoglineCard({ content, onRegenerate, onRefine, isRefining }: { content: string } & BaseCardProps) {
   return (
-    <CardShell title="LOGLINE">
+    <CardShell title="LOGLINE" isRefining={isRefining}>
       <div className="border-l-2 border-l-[#C8A97E] pl-4 text-[#E5E5E5] text-[1.1rem] font-light leading-[1.8]">{content}</div>
       <ActionRow onCopy={() => copyText(content)} onRegenerate={onRegenerate} isRefining={isRefining} />
-      <RefineRow onRefine={onRefine} isRefining={isRefining} />
+      <RefineRow
+        onRefine={onRefine}
+        isRefining={isRefining}
+        placeholder="e.g. make it darker, add urgency, the protagonist is actually an anti-hero..."
+      />
     </CardShell>
   )
 }
 
 export function SynopsisCard({ content, onRegenerate, onRefine, isRefining }: { content: string } & BaseCardProps) {
   return (
-    <CardShell title="SYNOPSIS">
+    <CardShell title="SYNOPSIS" isRefining={isRefining}>
       <div className="text-[#E5E5E5] text-[0.9rem] leading-[1.8] whitespace-pre-wrap">{content}</div>
       <ActionRow onCopy={() => copyText(content)} onRegenerate={onRegenerate} isRefining={isRefining} />
-      <RefineRow onRefine={onRefine} isRefining={isRefining} />
+      <RefineRow
+        onRefine={onRefine}
+        isRefining={isRefining}
+        placeholder="e.g. compress the second act, add a twist, emphasise the emotional stakes..."
+      />
     </CardShell>
   )
 }
@@ -151,7 +166,7 @@ export function GenreToneCard({
   content: GenreTone
 } & BaseCardProps) {
   return (
-    <CardShell title="GENRE + TONE">
+    <CardShell title="GENRE + TONE" isRefining={isRefining}>
       <div className="space-y-3">
         {content.primaryGenre && <div className="text-[#C8A97E] text-lg font-light">{content.primaryGenre}</div>}
         {content.subGenres && content.subGenres.length > 0 && (
@@ -174,7 +189,11 @@ export function GenreToneCard({
         )}
       </div>
       <ActionRow onCopy={() => copyText(JSON.stringify(content, null, 2))} onRegenerate={onRegenerate} isRefining={isRefining} />
-      <RefineRow onRefine={onRefine} isRefining={isRefining} />
+      <RefineRow
+        onRefine={onRefine}
+        isRefining={isRefining}
+        placeholder="e.g. shift to thriller, add horror elements, make it more grounded..."
+      />
     </CardShell>
   )
 }
@@ -198,7 +217,7 @@ export function CharacterCard({
   }, [content])
 
   return (
-    <CardShell title="CHARACTER BREAKDOWN">
+    <CardShell title="CHARACTER BREAKDOWN" isRefining={isRefining}>
       {parsed.kind === 'characters' ? (
         <div className="space-y-3">
           {parsed.value.map((character, idx) => {
@@ -230,7 +249,11 @@ export function CharacterCard({
         </pre>
       )}
       <ActionRow onCopy={() => copyText(JSON.stringify(content, null, 2))} onRegenerate={onRegenerate} isRefining={isRefining} />
-      <RefineRow onRefine={onRefine} isRefining={isRefining} />
+      <RefineRow
+        onRefine={onRefine}
+        isRefining={isRefining}
+        placeholder="e.g. add a rival character, make the lead's motivation more complex..."
+      />
     </CardShell>
   )
 }
@@ -255,7 +278,7 @@ export function OnePagerCard({
   const hasCharacters = Boolean(asObject?.characters)
 
   return (
-    <CardShell title="ONE-PAGER">
+    <CardShell title="ONE-PAGER" isRefining={isRefining}>
       {typeof content === 'string' ? (
         <div className="text-[#E5E5E5] text-[0.9rem] leading-[1.8] whitespace-pre-wrap">{content}</div>
       ) : asObject ? (
@@ -303,7 +326,11 @@ export function OnePagerCard({
         </pre>
       )}
       <ActionRow onCopy={() => copyText(textVersion)} onRegenerate={onRegenerate} copyLabel="Copy full one-pager" isRefining={isRefining} />
-      <RefineRow onRefine={onRefine} isRefining={isRefining} />
+      <RefineRow
+        onRefine={onRefine}
+        isRefining={isRefining}
+        placeholder="e.g. make it sound more commercial, target OTT platforms, punch up the logline..."
+      />
     </CardShell>
   )
 }

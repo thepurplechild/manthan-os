@@ -18,6 +18,7 @@ import { generateOnePager } from '@/app/actions/onePager'
 import { LoglineCard, SynopsisCard, GenreToneCard, CharacterCard, OnePagerCard } from './OutputCards'
 
 type OutputKey = 'logline' | 'genreTone' | 'characterBreakdown' | 'synopsis' | 'onePager'
+type RefiningType = OutputKey | 'all'
 
 const acceptedMimeTypes = {
   'application/pdf': ['.pdf'],
@@ -82,7 +83,7 @@ export function WriterConversationExperience() {
   const [outputs, setOutputs] = useState<GeneratedOutputs>({})
   const [conversationError, setConversationError] = useState<string | null>(null)
   const [lastMessageForRetry, setLastMessageForRetry] = useState<string>('')
-  const [refiningType, setRefiningType] = useState<OutputKey | null>(null)
+  const [refiningType, setRefiningType] = useState<RefiningType | null>(null)
 
   const knownDimensions = useMemo(() => inferKnownDimensions(messages, outputs), [messages, outputs])
 
@@ -476,43 +477,35 @@ export function WriterConversationExperience() {
   }
 
   const handleRefineOutput = async (type: OutputKey, note: string) => {
+    if (!workingDocumentId) return
     const trimmed = note.trim()
     if (!trimmed) return
-    setRefiningType(type)
+
+    const refineMessage: Message = {
+      role: 'writer',
+      content: `Please refine the story based on this note: ${trimmed}. This should affect the ${type} and all other outputs.`,
+    }
+
+    const updatedMessages = [...messages, refineMessage]
+    setMessages(updatedMessages)
+    setStoryMaterial((prev) => prev + `\n\nRefinement note: ${trimmed}`)
+
     try {
-      const labelMap: Record<OutputKey, string> = {
-        logline: 'logline',
-        genreTone: 'genre and tone',
-        characterBreakdown: 'character breakdown',
-        synopsis: 'synopsis',
-        onePager: 'one-pager',
-      }
-      const refineMessage: Message = {
-        role: 'writer',
-        content: `Please refine the ${labelMap[type]}: ${trimmed}`,
-      }
-      const updatedMessages = [...messages, refineMessage]
-      const combinedMaterial = [storyMaterial, refineMessage.content].filter(Boolean).join('\n\n')
+      const updatedMaterial = storyMaterial + `\n\nRefinement: ${trimmed}`
+      await updateWorkingDocumentText(workingDocumentId, updatedMaterial)
+      setRefiningType('all')
 
-      setMessages(updatedMessages)
-      setStoryMaterial(combinedMaterial)
+      await supabase
+        .from('script_analysis_outputs')
+        .delete()
+        .eq('document_id', workingDocumentId)
 
-      const turn = await requestTurnWithRetry(updatedMessages, combinedMaterial)
-      if (turn.ready) {
-        setMessages((prev) => [
-          ...prev,
-          { role: 'manthan', content: turn.summary || 'Great. I have enough to refine this output.' },
-        ])
-      } else if (turn.question) {
-        setMessages((prev) => [...prev, { role: 'manthan', content: turn.question || 'Could you tell me more?' }])
-      }
-
-      await handleRegenerate(type)
-      toast.success('Refinement applied')
+      await generateOutputs(workingDocumentId)
+      setRefiningType(null)
+      toast.success('Updated your story package')
     } catch (error) {
       console.error('handleRefineOutput failure:', { type, error })
       toast.error('Could not refine output. Please retry.')
-    } finally {
       setRefiningType(null)
     }
   }
@@ -659,13 +652,19 @@ export function WriterConversationExperience() {
             )}
           </div>
 
+          {refiningType === 'all' && (
+            <div className="rounded-[8px] border border-[#1E1E1E] bg-[#111111] p-3 text-sm text-[#C8A97E] animate-pulse">
+              Updating your story package...
+            </div>
+          )}
+
           {outputs.logline && (
             <LoglineCard
               title="LOGLINE"
               content={outputs.logline}
               onRegenerate={() => handleRegenerate('logline')}
               onRefine={(note) => handleRefineOutput('logline', note)}
-              isRefining={refiningType === 'logline'}
+              isRefining={refiningType === 'all' || refiningType === 'logline'}
             />
           )}
           {outputs.genreTone && (
@@ -674,7 +673,7 @@ export function WriterConversationExperience() {
               content={outputs.genreTone}
               onRegenerate={() => handleRegenerate('genreTone')}
               onRefine={(note) => handleRefineOutput('genreTone', note)}
-              isRefining={refiningType === 'genreTone'}
+              isRefining={refiningType === 'all' || refiningType === 'genreTone'}
             />
           )}
           {outputs.characterBreakdown && (
@@ -683,7 +682,7 @@ export function WriterConversationExperience() {
               content={outputs.characterBreakdown}
               onRegenerate={() => handleRegenerate('characterBreakdown')}
               onRefine={(note) => handleRefineOutput('characterBreakdown', note)}
-              isRefining={refiningType === 'characterBreakdown'}
+              isRefining={refiningType === 'all' || refiningType === 'characterBreakdown'}
             />
           )}
           {outputs.synopsis && (
@@ -692,7 +691,7 @@ export function WriterConversationExperience() {
               content={outputs.synopsis}
               onRegenerate={() => handleRegenerate('synopsis')}
               onRefine={(note) => handleRefineOutput('synopsis', note)}
-              isRefining={refiningType === 'synopsis'}
+              isRefining={refiningType === 'all' || refiningType === 'synopsis'}
             />
           )}
           {outputs.onePager && (
@@ -701,7 +700,7 @@ export function WriterConversationExperience() {
               content={outputs.onePager}
               onRegenerate={() => handleRegenerate('onePager')}
               onRefine={(note) => handleRefineOutput('onePager', note)}
-              isRefining={refiningType === 'onePager'}
+              isRefining={refiningType === 'all' || refiningType === 'onePager'}
             />
           )}
         </div>
