@@ -45,6 +45,14 @@ After 3-5 exchanges, if you have enough, respond with:
 Otherwise respond with:
 {"ready": false, "question": "your question here"}
 
+CRITICAL RULE: You have access to the full conversation 
+history above. Read it carefully. NEVER ask about a topic 
+that has already been discussed. If the writer has already 
+answered about audience, do NOT ask about audience again. 
+Move to the next unanswered dimension. If all 5 dimensions 
+(audience, themes, character, world, stakes) have been 
+addressed, respond with ready:true.
+
 IMPORTANT: Respond ONLY with valid JSON. No other text.`
 
 export async function GET() {
@@ -63,23 +71,29 @@ export async function POST(request: NextRequest) {
     
     const { messages = [], storyMaterial = '' } = body
 
-    const userContent = storyMaterial || 
-      messages[messages.length - 1]?.content || 
-      'Tell me about your story'
-
     console.log('Calling Anthropic...')
-    
+    const anthropicMessages = messages.map(
+      (m: {role: string, content: string}) => ({
+        role: ((m.role === 'manthan' ? 'assistant' : 'user') as 'user' | 'assistant'),
+        content: m.content
+      })
+    )
+
+    // If last message is not from writer, add the storyMaterial
+    // as the current user turn
+    const lastMessage = anthropicMessages[anthropicMessages.length - 1]
+    if (!lastMessage || lastMessage.role !== 'user') {
+      anthropicMessages.push({ 
+        role: 'user', 
+        content: storyMaterial || 'Tell me about your story' 
+      })
+    }
+
     const response = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 500,
       system: SYSTEM_PROMPT,
-      messages: [
-        ...messages.slice(0, -1).map((m: {role: string, content: string}) => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content
-        })),
-        { role: 'user', content: userContent }
-      ]
+      messages: anthropicMessages
     })
 
     console.log('Anthropic responded')
