@@ -129,6 +129,38 @@ export function formatOnePagerAsText(content: unknown): string {
   return JSON.stringify(content, null, 2)
 }
 
+function toReadableText(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => toReadableText(item))
+      .filter(Boolean)
+      .join(', ')
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .map(([key, entry]) => `${key}: ${toReadableText(entry)}`)
+      .filter((line) => !line.endsWith(': '))
+    return entries.join('; ')
+  }
+  return String(value)
+}
+
+function formatGenreAndTone(value: unknown): string {
+  if (!value) return ''
+  if (typeof value === 'string') return value
+  if (typeof value !== 'object') return toReadableText(value)
+
+  const record = value as Record<string, unknown>
+  const primaryGenre = toReadableText(record.primaryGenre || record.genre)
+  const subGenres = toReadableText(record.subGenres)
+  const tone = toReadableText(record.tone)
+
+  return [primaryGenre, subGenres, tone].filter(Boolean).join(' - ')
+}
+
 export function LoglineCard({ content, onRegenerate, onRefine, isRefining }: { content: string } & BaseCardProps) {
   return (
     <CardShell title="LOGLINE" isRefining={isRefining}>
@@ -269,13 +301,11 @@ export function OnePagerCard({
   const asObject = content && typeof content === 'object' ? (content as Record<string, unknown>) : null
   const textVersion = formatOnePagerAsText(content)
   const titleText = asObject?.title ? String(asObject.title) : ''
-  const loglineText = asObject?.logline ? String(asObject.logline) : ''
-  const synopsisText = asObject?.synopsis ? String(asObject.synopsis) : ''
-  const genreToneText =
-    asObject && (asObject.genre || asObject.genreAndTone || asObject.tone)
-      ? String(asObject.genre || JSON.stringify(asObject.genreAndTone || asObject.tone, null, 2))
-      : ''
-  const hasCharacters = Boolean(asObject?.characters)
+  const loglineText = toReadableText(asObject?.logline)
+  const synopsisText = toReadableText(asObject?.synopsis)
+  const genreToneText = asObject ? formatGenreAndTone(asObject.genreAndTone || asObject.genre || asObject.tone) : ''
+  const charactersText = toReadableText(asObject?.characters)
+  const hasCharacters = Boolean(charactersText)
 
   return (
     <CardShell title="ONE-PAGER" isRefining={isRefining}>
@@ -309,21 +339,21 @@ export function OnePagerCard({
             <>
               <div className="h-px bg-[#1A1A1A]" />
               <SectionLabel>Key Characters</SectionLabel>
-              <pre className="whitespace-pre-wrap text-sm leading-[1.8] text-[#E5E5E5] bg-[#0A0A0A] border border-[#2A2A2A] rounded-[8px] p-3">
-                {JSON.stringify(asObject.characters, null, 2)}
-              </pre>
+              <div className="whitespace-pre-wrap text-sm leading-[1.8] text-[#E5E5E5] bg-[#0A0A0A] border border-[#2A2A2A] rounded-[8px] p-3">
+                {charactersText}
+              </div>
             </>
           )}
           {!titleText && !loglineText && !synopsisText && !genreToneText && !hasCharacters && (
-            <pre className="whitespace-pre-wrap text-sm leading-[1.8] text-[#E5E5E5] bg-[#0A0A0A] border border-[#2A2A2A] rounded-[8px] p-3">
-              {JSON.stringify(asObject, null, 2)}
-            </pre>
+            <div className="whitespace-pre-wrap text-sm leading-[1.8] text-[#E5E5E5] bg-[#0A0A0A] border border-[#2A2A2A] rounded-[8px] p-3">
+              {toReadableText(asObject)}
+            </div>
           )}
         </div>
       ) : (
-        <pre className="whitespace-pre-wrap text-sm leading-[1.8] text-[#E5E5E5] bg-[#0A0A0A] border border-[#2A2A2A] rounded-[8px] p-3">
-          {JSON.stringify(content, null, 2)}
-        </pre>
+        <div className="whitespace-pre-wrap text-sm leading-[1.8] text-[#E5E5E5] bg-[#0A0A0A] border border-[#2A2A2A] rounded-[8px] p-3">
+          {toReadableText(content)}
+        </div>
       )}
       <ActionRow onCopy={() => copyText(textVersion)} onRegenerate={onRegenerate} copyLabel="Copy full one-pager" isRefining={isRefining} />
       <RefineRow
