@@ -73,6 +73,16 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     revalidatePath(`/dashboard/projects/${id}`)
   }
 
+  async function onAnalysisComplete() {
+    'use server'
+    revalidatePath(`/dashboard/projects/${id}`)
+  }
+
+  async function onOutputsRegenerated() {
+    'use server'
+    revalidatePath(`/dashboard/projects/${id}`)
+  }
+
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-[#E5E5E5]">
       <div className="px-6 py-5 border-b border-[#1A1A1A]">
@@ -91,7 +101,12 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
       <div className="flex h-[calc(100vh-10rem)] bg-[#0A0A0A] overflow-hidden flex-col lg:flex-row">
         <div className="w-full lg:w-64 flex-shrink-0 border-r border-[#1A1A1A] overflow-y-auto">
-          <AssetPanel projectId={project.id} assets={assets || []} onAssetAdded={onAssetAdded} />
+          <AssetPanel
+            projectId={project.id}
+            assets={assets || []}
+            onAssetAdded={onAssetAdded}
+            onAnalysisComplete={onAnalysisComplete}
+          />
         </div>
 
         <div className="flex-1 overflow-hidden">
@@ -120,6 +135,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
               message_type: string
               created_at: string
             }>) || []}
+            onOutputsRegenerated={onOutputsRegenerated}
           />
         </div>
 

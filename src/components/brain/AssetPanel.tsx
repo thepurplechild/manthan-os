@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatFileSize } from '@/lib/types/projects'
@@ -22,15 +22,33 @@ interface AssetPanelProps {
   projectId: string
   assets: AssetItem[]
   onAssetAdded: () => Promise<void>
+  onAnalysisComplete?: () => Promise<void> | void
 }
 
-export function AssetPanel({ projectId, assets, onAssetAdded }: AssetPanelProps) {
+export function AssetPanel({ projectId, assets, onAssetAdded, onAnalysisComplete }: AssetPanelProps) {
   const router = useRouter()
   const supabase = createClient()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [analysing, setAnalysing] = useState(false)
+  const [localAssets, setLocalAssets] = useState<AssetItem[]>(assets)
+
+  useEffect(() => {
+    setLocalAssets(assets)
+  }, [assets])
+
+  const refreshAssets = async (ownerId: string) => {
+    const client = createClient()
+    const { data } = await client
+      .from('documents')
+      .select('id, title, asset_type, processing_status, file_size_bytes, created_at')
+      .eq('owner_id', ownerId)
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+
+    if (data) setLocalAssets(data as AssetItem[])
+  }
 
   const waitForExtraction = async (
     documentId: string,
@@ -138,14 +156,15 @@ export function AssetPanel({ projectId, assets, onAssetAdded }: AssetPanelProps)
         toast.error('Could not read this file. Other assets are still available to Manthan.')
       }
 
+      await onAssetAdded()
       setAnalysing(true)
       await fetch('/api/brain/analyse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId }),
+        body: JSON.stringify({ projectId })
       })
-
-      await onAssetAdded()
+      await refreshAssets(user.id)
+      await onAnalysisComplete?.()
       window.dispatchEvent(new CustomEvent('manthan-brain-updated'))
       router.refresh()
       toast.success('Asset upload complete')
@@ -191,10 +210,10 @@ export function AssetPanel({ projectId, assets, onAssetAdded }: AssetPanelProps)
       )}
 
       <div className="space-y-2">
-        {assets.length === 0 ? (
+        {localAssets.length === 0 ? (
           <div className="text-sm text-[#666666]">No assets yet. Upload your first file.</div>
         ) : (
-          assets.map((asset) => {
+          localAssets.map((asset) => {
             const isImage = (asset.asset_type || '').toUpperCase().includes('IMAGE')
             const status = (asset.processing_status || '').toUpperCase()
             return (

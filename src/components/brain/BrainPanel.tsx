@@ -6,6 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { SuggestionCard } from '@/components/brain/SuggestionCard'
+import { generateLoglines } from '@/app/actions/loglines'
+import { generateSynopsis } from '@/app/actions/synopsis'
+import { generateCharacterBible } from '@/app/actions/characterBible'
+import { generateOnePager } from '@/app/actions/onePager'
 
 type Brain = {
   story_summary: string
@@ -38,15 +42,23 @@ interface BrainPanelProps {
   initialBrain: Brain
   initialSuggestions: Suggestion[]
   initialMessages: Message[]
+  onOutputsRegenerated?: () => Promise<void> | void
 }
 
-export function BrainPanel({ projectId, initialBrain, initialSuggestions, initialMessages }: BrainPanelProps) {
+export function BrainPanel({
+  projectId,
+  initialBrain,
+  initialSuggestions,
+  initialMessages,
+  onOutputsRegenerated
+}: BrainPanelProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [suggestions, setSuggestions] = useState<Suggestion[]>(initialSuggestions)
   const [brain, setBrain] = useState<Brain>(initialBrain)
   const [inputDraft, setInputDraft] = useState('')
   const [thinking, setThinking] = useState(false)
   const [analysing, setAnalysing] = useState(false)
+  const [updatingOutputs, setUpdatingOutputs] = useState(false)
 
   const triggerAnalysis = useCallback(async () => {
     setAnalysing(true)
@@ -59,10 +71,21 @@ export function BrainPanel({ projectId, initialBrain, initialSuggestions, initia
       const data = await res.json()
       if (data.brain) setBrain(data.brain)
       if (data.suggestions) setSuggestions(data.suggestions)
+      if (data.primaryDocumentId) {
+        setUpdatingOutputs(true)
+        await generateLoglines(data.primaryDocumentId)
+        await generateSynopsis(data.primaryDocumentId)
+        await generateCharacterBible(data.primaryDocumentId)
+        await generateOnePager(data.primaryDocumentId)
+        await onOutputsRegenerated?.()
+        window.dispatchEvent(new CustomEvent('manthan-outputs-regenerated'))
+        setUpdatingOutputs(false)
+      }
     } finally {
+      setUpdatingOutputs(false)
       setAnalysing(false)
     }
-  }, [projectId])
+  }, [onOutputsRegenerated, projectId])
 
   useEffect(() => {
     const staleMs = 15 * 60 * 1000
@@ -172,6 +195,7 @@ export function BrainPanel({ projectId, initialBrain, initialSuggestions, initia
           </div>
         )}
         {analysing && <div className="text-xs text-[#C8A97E] animate-pulse">Manthan is reading your assets...</div>}
+        {updatingOutputs && <div className="text-xs text-[#C8A97E] animate-pulse">Manthan is updating story package...</div>}
 
         {brain?.story_summary && (
           <div className="rounded-[8px] border border-[#1A1A1A] bg-[#0D0D0D] p-3 space-y-2">

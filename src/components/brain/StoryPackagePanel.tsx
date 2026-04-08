@@ -49,6 +49,18 @@ export function StoryPackagePanel({ projectId, documentIds }: StoryPackagePanelP
     void fetchOutputs()
   }, [documentIds.join(',')])
 
+  useEffect(() => {
+    const onRegenerated = () => {
+      void fetchOutputs()
+    }
+    window.addEventListener('manthan-outputs-regenerated', onRegenerated)
+    window.addEventListener('manthan-brain-updated', onRegenerated)
+    return () => {
+      window.removeEventListener('manthan-outputs-regenerated', onRegenerated)
+      window.removeEventListener('manthan-brain-updated', onRegenerated)
+    }
+  }, [documentIds.join(',')])
+
   const latestByType = useMemo(() => {
     return outputs.reduce<Record<string, OutputRecord>>((acc, output) => {
       if (!acc[output.output_type]) acc[output.output_type] = output

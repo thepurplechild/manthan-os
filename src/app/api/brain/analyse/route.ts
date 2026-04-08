@@ -35,11 +35,11 @@ export async function POST(request: NextRequest) {
     )
 
     // Fetch all documents for this project
-    const { data: documents } = await supabase
+    const { data: projectDocs } = await supabase
       .from('documents')
       .select('id, title, asset_type, extracted_text, mime_type, processing_status')
       .eq('owner_id', user.id)
-      .or(`project_id.eq.${projectId},id.in.(select document_id from script_analysis_outputs where document_id in (select id from documents where owner_id = '${user.id}'))`)
+      .eq('project_id', projectId)
       .not('extracted_text', 'is', null)
 
     // Also fetch documents linked via script_analysis_outputs
@@ -50,7 +50,8 @@ export async function POST(request: NextRequest) {
       .not('extracted_text', 'is', null)
 
     // Combine and deduplicate
-    const allDocs = linkedDocs || []
+    const allDocs = [...(projectDocs || []), ...(linkedDocs || [])]
+      .filter((doc, idx, arr) => arr.findIndex((candidate) => candidate.id === doc.id) === idx)
     const assetTexts = allDocs
       .filter(d => d.extracted_text)
       .map(d => `[${d.asset_type || 'DOCUMENT'}: ${d.title}]
@@ -69,22 +70,6 @@ ${d.extracted_text}`)
       .map(d => d.id)
       .sort()
       .join(',')
-
-    // Check if re-analysis needed
-    const { data: existingBrain } = await supabase
-      .from('project_brain')
-      .select('asset_hash')
-      .eq('project_id', projectId)
-      .single()
-
-    if (existingBrain?.asset_hash === assetHash) {
-      const { data: brain } = await supabase
-        .from('project_brain')
-        .select('*')
-        .eq('project_id', projectId)
-        .single()
-      return NextResponse.json({ brain, unchanged: true })
-    }
 
     // Call Claude to synthesise all assets
     const synthesisResponse = await anthropic.messages.create({
@@ -218,7 +203,36 @@ Analyse all assets and return your synthesis as JSON.`
         )
     }
 
-    return NextResponse.json({ brain, suggestions: synthesis.suggestions })
+    const { data: primaryDoc } = await supabase
+      .from('documents')
+      .select('id, extracted_text')
+      .eq('owner_id', user.id)
+      .eq('project_id', projectId)
+      .eq('is_primary', true)
+      .not('extracted_text', 'is', null)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .single()
+
+    if (primaryDoc) {
+      await supabase
+        .from('documents')
+        .update({
+          extracted_text: synthesis.synthesised_context
+        })
+        .eq('id', primaryDoc.id)
+
+      await supabase
+        .from('script_analysis_outputs')
+        .delete()
+        .eq('document_id', primaryDoc.id)
+    }
+
+    return NextResponse.json({
+      brain,
+      suggestions: synthesis.suggestions,
+      primaryDocumentId: primaryDoc?.id
+    })
 
   } catch (error) {
     console.error('Brain analyse error:', error)
