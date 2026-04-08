@@ -34,39 +34,27 @@ export async function POST(request: NextRequest) {
       { error: 'Project not found' }, { status: 404 }
     )
 
-    // Fetch all documents for this project
-    const { data: projectDocs } = await supabase
+    const { data: projectDocuments } = await supabase
       .from('documents')
       .select('id, title, asset_type, extracted_text, mime_type, processing_status')
-      .eq('owner_id', user.id)
       .eq('project_id', projectId)
       .not('extracted_text', 'is', null)
+      .in('processing_status', ['COMPLETED', 'READY'])
 
-    // Also fetch documents linked via script_analysis_outputs
-    const { data: linkedDocs } = await supabase
-      .from('documents')
-      .select('id, title, asset_type, extracted_text, mime_type, processing_status')
-      .eq('owner_id', user.id)
-      .not('extracted_text', 'is', null)
+    if (!projectDocuments || projectDocuments.length === 0) {
+      return NextResponse.json({
+        brain: null,
+        message: 'No extracted content found for this project'
+      })
+    }
 
-    // Combine and deduplicate
-    const allDocs = [...(projectDocs || []), ...(linkedDocs || [])]
-      .filter((doc, idx, arr) => arr.findIndex((candidate) => candidate.id === doc.id) === idx)
-    const assetTexts = allDocs
-      .filter(d => d.extracted_text)
+    const assetTexts = projectDocuments
       .map(d => `[${d.asset_type || 'DOCUMENT'}: ${d.title}]
 ${d.extracted_text}`)
       .join('\n\n---\n\n')
 
-    if (!assetTexts) {
-      return NextResponse.json({
-        brain: null,
-        message: 'No extracted content found yet'
-      })
-    }
-
     // Generate asset hash to detect changes
-    const assetHash = allDocs
+    const assetHash = projectDocuments
       .map(d => d.id)
       .sort()
       .join(',')
