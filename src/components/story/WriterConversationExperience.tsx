@@ -32,43 +32,6 @@ const acceptedMimeTypes = {
   'text/markdown': ['.md'],
 }
 
-function inferKnownDimensions(messages: Message[], outputs: GeneratedOutputs) {
-  const writerText = messages
-    .filter((m) => m.role === 'writer')
-    .map((m) => m.content)
-    .join('\n')
-
-  const audiencePattern = new RegExp(
-    '(teen|young adult|adult|family|children|kids|teenager|everyone|universal|women|men|male|female|urban|rural|metros)',
-    'i'
-  )
-  const themesPattern = new RegExp(
-    '(theme|identity|love|grief|revenge|class|faith|justice|family|friendship|belonging|loss|power|freedom|survival|loyalty|betrayal|redemption)',
-    'i'
-  )
-  const characterPattern = new RegExp(
-    '(protagonist|hero|anti-hero|villain|antagonist|character|arjun|raj|priya|drives|motivation|wants|seeks|fears|arc|journey)',
-    'i'
-  )
-  const worldPattern = new RegExp(
-    '(world|setting|city|village|future|past|fantasy|realistic|mythic|mumbai|delhi|india|school|college|urban|rural|period|contemporary|modern)',
-    'i'
-  )
-  const stakesPattern = new RegExp(
-    '(lose|risk|stakes|consequence|fail|death|survive|afraid|scared|threatens|danger|cost|price)',
-    'i'
-  )
-
-  return {
-    audience: audiencePattern.test(writerText) ? 'partially-defined' : '',
-    themes: themesPattern.test(writerText) ? 'partially-defined' : '',
-    character: characterPattern.test(writerText) ? 'partially-defined' : '',
-    world: worldPattern.test(writerText) ? 'partially-defined' : '',
-    stakes: stakesPattern.test(writerText) ? 'partially-defined' : '',
-    outputsReady: Boolean(outputs.logline || outputs.synopsis),
-  }
-}
-
 function makeProjectTitle(firstWriterMessage?: string) {
   if (!firstWriterMessage) return 'Untitled Story'
   return firstWriterMessage
@@ -101,8 +64,13 @@ export function WriterConversationExperience({ projectId }: WriterConversationEx
   const [lastMessageForRetry, setLastMessageForRetry] = useState<string>('')
   const [refiningType, setRefiningType] = useState<RefiningType | null>(null)
   const [projectTitle, setProjectTitle] = useState<string>('')
-
-  const knownDimensions = useMemo(() => inferKnownDimensions(messages, outputs), [messages, outputs])
+  const [knownDimensions, setKnownDimensions] = useState({
+    audience: false,
+    themes: false,
+    character: false,
+    world: false,
+    stakes: false
+  })
 
   useEffect(() => {
     const bootstrapProjectContext = async () => {
@@ -133,9 +101,30 @@ export function WriterConversationExperience({ projectId }: WriterConversationEx
 
   const dimensionProgress = useMemo(() => {
     const fields = ['audience', 'themes', 'character', 'world', 'stakes'] as const
-    const complete = fields.filter((f) => Boolean(knownDimensions[f])).length
+    const complete = fields.filter((f) => knownDimensions[f] === true).length
     return { complete, total: fields.length, percent: Math.round((complete / fields.length) * 100) }
   }, [knownDimensions])
+
+  const updateDimensions = async (history: Message[]) => {
+    if (history.length < 2) return
+    try {
+      const res = await fetch('/api/conversation/dimensions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: history })
+      })
+      const dims = await res.json()
+      setKnownDimensions({
+        audience: dims?.audience === true,
+        themes: dims?.themes === true,
+        character: dims?.character === true,
+        world: dims?.world === true,
+        stakes: dims?.stakes === true,
+      })
+    } catch {
+      // Fail silently - dimensions are UI only
+    }
+  }
 
   const buildConversationErrorMessage = (error: unknown) => {
     if (process.env.NODE_ENV === 'development') {
@@ -501,7 +490,7 @@ export function WriterConversationExperience({ projectId }: WriterConversationEx
         role: 'writer',
         content: messageText || 'Uploaded reference files for context.',
       }
-      const updatedMessages = [...messages, userMessage]
+      const fullHistoryForAPI = [...messages, userMessage]
       setMessages((prev) => {
         const last = prev[prev.length - 1]
         if (last?.role === userMessage.role && last?.content === userMessage.content) return prev
@@ -518,7 +507,7 @@ export function WriterConversationExperience({ projectId }: WriterConversationEx
         .join('\n\n')
       setStoryMaterial(combinedMaterial)
 
-      const turn = await requestTurnWithRetry(updatedMessages, combinedMaterial)
+      const turn = await requestTurnWithRetry(fullHistoryForAPI, combinedMaterial)
       console.log('sendConversationTurn received turn response:', turn)
       const docId = await ensureWorkingDocument(combinedMaterial || userMessage.content)
       await updateWorkingDocumentText(docId, combinedMaterial || userMessage.content)
@@ -532,6 +521,8 @@ export function WriterConversationExperience({ projectId }: WriterConversationEx
           if (last?.role === assistantMessage.role && last?.content === assistantMessage.content) return prev
           return [...prev, assistantMessage]
         })
+        const fullHistory = [...fullHistoryForAPI, assistantMessage]
+        void updateDimensions(fullHistory)
         await generateOutputs(docId)
       } else {
         const assistantMessage = {
@@ -543,6 +534,8 @@ export function WriterConversationExperience({ projectId }: WriterConversationEx
           if (last?.role === assistantMessage.role && last?.content === assistantMessage.content) return prev
           return [...prev, assistantMessage]
         })
+        const fullHistory = [...fullHistoryForAPI, assistantMessage]
+        void updateDimensions(fullHistory)
       }
 
       setDraft('')
@@ -754,7 +747,7 @@ export function WriterConversationExperience({ projectId }: WriterConversationEx
               <div className="grid grid-cols-2 gap-2 text-xs">
                 {['Audience', 'Themes', 'Character', 'World', 'Stakes'].map((label) => {
                   const key = label.toLowerCase()
-                  const isKnown = key in knownDimensions && Boolean((knownDimensions as Record<string, unknown>)[key])
+                  const isKnown = knownDimensions[key as keyof typeof knownDimensions] === true
                   return (
                     <div key={label} className="flex items-center gap-2">
                       <span className={`h-2 w-2 rounded-full ${isKnown ? 'bg-[#C8A97E]' : 'bg-[#2A2A2A]'}`} />
