@@ -73,6 +73,12 @@ export default function DashboardLayout({
     }
   }
 
+  const isProjectBoard = Boolean(pathname.match(/\/dashboard\/projects\/[a-f0-9-]{36}$/))
+
+  if (isProjectBoard) {
+    return <>{children}</>
+  }
+
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-[#E5E5E5]">
       {/* Mobile sidebar overlay */}

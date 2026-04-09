@@ -239,7 +239,9 @@ export function ProjectBoard({
           ) : (
             <div className="space-y-4">
               <div className="columns-1 md:columns-2 gap-4">
-                {documents.map((doc) => (
+                {documents
+                  .filter((doc, index, self) => index === self.findIndex((d) => d.id === doc.id))
+                  .map((doc) => (
                   <AssetCard
                     key={doc.id}
                     document={doc}
@@ -258,6 +260,7 @@ export function ProjectBoard({
       <div className="hidden lg:flex w-96 shrink-0">
         <StoryOutputsPanel
           projectId={projectId}
+          projectTitle={projectTitle}
           brain={brain}
           suggestions={suggestions}
           initialMessages={initialMessages}
@@ -269,6 +272,7 @@ export function ProjectBoard({
       {/* Mobile outputs toggle */}
       <MobileOutputsDrawer
         projectId={projectId}
+        projectTitle={projectTitle}
         brain={brain}
         suggestions={suggestions}
         initialMessages={initialMessages}
@@ -288,7 +292,17 @@ export function ProjectBoard({
 
       {/* Modal */}
       {selectedDocument && (
-        <AssetCardModal document={selectedDocument} onClose={() => setSelectedDocument(null)} />
+        <AssetCardModal
+          document={selectedDocument}
+          onClose={() => setSelectedDocument(null)}
+          onSave={(extraction) => {
+            setDocuments((prev) =>
+              prev.map((d) =>
+                d.id === selectedDocument.id ? { ...d, asset_metadata: extraction } : d
+              )
+            )
+          }}
+        />
       )}
     </div>
   )
@@ -300,6 +314,7 @@ function setChatOpenGlobally() {
 
 function MobileOutputsDrawer(props: {
   projectId: string
+  projectTitle: string
   brain: Brain
   suggestions: Suggestion[]
   initialMessages: Message[]

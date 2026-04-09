@@ -20,9 +20,10 @@ interface AssetExtraction {
 interface AssetCardModalProps {
   document: DocumentItem
   onClose: () => void
+  onSave?: (extraction: AssetExtraction) => void
 }
 
-export function AssetCardModal({ document: doc, onClose }: AssetCardModalProps) {
+export function AssetCardModal({ document: doc, onClose, onSave }: AssetCardModalProps) {
   const initialExtraction =
     doc.asset_metadata && typeof doc.asset_metadata === 'object' && Object.keys(doc.asset_metadata).length > 0
       ? (doc.asset_metadata as AssetExtraction)
@@ -81,9 +82,17 @@ export function AssetCardModal({ document: doc, onClose }: AssetCardModalProps) 
   const saveChanges = async () => {
     if (!extraction) return
     const supabase = createClient()
-    await supabase.from('documents').update({ asset_metadata: extraction }).eq('id', doc.id)
-    setDirty(false)
-    toast.success('Changes saved')
+    const { error } = await supabase
+      .from('documents')
+      .update({ asset_metadata: extraction })
+      .eq('id', doc.id)
+    if (!error) {
+      setDirty(false)
+      toast.success('Changes saved')
+      onSave?.(extraction)
+    } else {
+      toast.error('Could not save changes')
+    }
   }
 
   const sendChat = async () => {

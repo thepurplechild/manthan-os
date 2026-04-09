@@ -43,6 +43,7 @@ function FileIcon({ mime }: { mime: string }) {
 function StatusDot({ status }: { status: string }) {
   const upper = (status || '').toUpperCase()
   if (upper === 'EXTRACTION_FAILED') return <span className="h-2 w-2 rounded-full bg-[#EF4444] shrink-0" />
+  if (upper === 'STUCK') return <span className="h-2 w-2 rounded-full bg-[#F59E0B] shrink-0" />
   if (upper === 'READY' || upper === 'COMPLETED') return <span className="h-2 w-2 rounded-full bg-[#C8A97E] shrink-0" />
   return <span className="h-2 w-2 rounded-full bg-[#444444] animate-pulse shrink-0" />
 }
@@ -89,8 +90,37 @@ export function AssetCard({ document: doc, onDelete, onClick }: AssetCardProps) 
     }
   }
 
+  const [retrying, setRetrying] = useState(false)
+
   const status = (doc.processing_status || '').toUpperCase()
   const isProcessing = status === 'UPLOADED' || status === 'PROCESSING'
+  const isStuck =
+    status === 'UPLOADED' &&
+    (Date.now() - new Date(doc.created_at).getTime()) > 5 * 60 * 1000
+
+  const retryProcessing = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setRetrying(true)
+    try {
+      await fetch('/api/inngest/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event: 'document.uploaded',
+          data: {
+            documentId: doc.id,
+            userId: '',
+            storagePath: '',
+            fileName: doc.title,
+          },
+        }),
+      })
+    } catch {
+      // fail silently
+    } finally {
+      setRetrying(false)
+    }
+  }
 
   return (
     <div
@@ -103,7 +133,7 @@ export function AssetCard({ document: doc, onDelete, onClick }: AssetCardProps) 
           <FileIcon mime={doc.mime_type} />
         </span>
         <span className="text-sm text-[#E5E5E5] truncate flex-1 min-w-0">{doc.title}</span>
-        <StatusDot status={doc.processing_status} />
+        <StatusDot status={isStuck ? 'STUCK' : doc.processing_status} />
         <button
           type="button"
           onClick={(e) => {
@@ -116,8 +146,22 @@ export function AssetCard({ document: doc, onDelete, onClick }: AssetCardProps) 
         </button>
       </div>
 
-      {/* Processing */}
-      {isProcessing && <p className="mt-2 text-xs text-[#555555] animate-pulse">Processing...</p>}
+      {/* Processing — stuck vs normal */}
+      {isStuck ? (
+        <div className="mt-2 flex items-center gap-2">
+          <p className="text-xs text-[#F59E0B]">Processing failed</p>
+          <button
+            type="button"
+            onClick={retryProcessing}
+            disabled={retrying}
+            className="text-[10px] text-[#C8A97E] hover:text-[#E5E5E5] underline"
+          >
+            {retrying ? 'Retrying...' : 'Retry'}
+          </button>
+        </div>
+      ) : isProcessing ? (
+        <p className="mt-2 text-xs text-[#555555] animate-pulse">Processing...</p>
+      ) : null}
 
       {/* Extracting */}
       {isExtracting && <p className="mt-2 text-xs text-[#C8A97E] animate-pulse">Manthan is reading...</p>}

@@ -123,10 +123,25 @@ export function formatOnePagerAsText(content: unknown): string {
     if (c.logline) sections.push(`LOGLINE\n${String(c.logline)}`)
     if (c.synopsis) sections.push(`SYNOPSIS\n${String(c.synopsis)}`)
     if (c.genre) sections.push(`GENRE\n${String(c.genre)}`)
-    if (c.characters) sections.push(`CHARACTERS\n${JSON.stringify(c.characters, null, 2)}`)
+    if (c.characters) {
+      if (Array.isArray(c.characters)) {
+        const charLines = (c.characters as Array<Record<string, unknown>>).map(
+          (ch) => `${ch.name || 'Unknown'} · ${ch.role || ''} · ${ch.arc || ch.characterArc || ch.description || ''}`
+        )
+        sections.push(`CHARACTERS\n${charLines.join('\n')}`)
+      } else {
+        sections.push(`CHARACTERS\n${toReadableText(c.characters)}`)
+      }
+    }
+    if (c.themes) {
+      const themes = Array.isArray(c.themes) ? (c.themes as string[]).join('\n• ') : String(c.themes)
+      sections.push(`THEMES\n• ${themes}`)
+    }
+    if (c.genreAndTone) sections.push(`GENRE & TONE\n${formatGenreAndTone(c.genreAndTone)}`)
+    if (sections.length === 0) return toReadableText(content)
     return sections.join('\n\n---\n\n')
   }
-  return JSON.stringify(content, null, 2)
+  return toReadableText(content)
 }
 
 function toReadableText(value: unknown): string {
@@ -220,7 +235,7 @@ export function GenreToneCard({
           </div>
         )}
       </div>
-      <ActionRow onCopy={() => copyText(JSON.stringify(content, null, 2))} onRegenerate={onRegenerate} isRefining={isRefining} />
+      <ActionRow onCopy={() => copyText(formatGenreAndTone(content))} onRegenerate={onRegenerate} isRefining={isRefining} />
       <RefineRow
         onRefine={onRefine}
         isRefining={isRefining}
@@ -276,11 +291,11 @@ export function CharacterCard({
       ) : parsed.kind === 'string' ? (
         <div className="text-[#E5E5E5] text-[0.9rem] leading-[1.8] whitespace-pre-wrap">{parsed.value}</div>
       ) : (
-        <pre className="whitespace-pre-wrap text-sm leading-[1.8] text-[#E5E5E5] bg-[#0A0A0A] border border-[#2A2A2A] rounded-[8px] p-3">
-          {JSON.stringify(parsed.value, null, 2)}
-        </pre>
+        <div className="whitespace-pre-wrap text-sm leading-[1.8] text-[#E5E5E5] bg-[#0A0A0A] border border-[#2A2A2A] rounded-[8px] p-3">
+          {toReadableText(parsed.value)}
+        </div>
       )}
-      <ActionRow onCopy={() => copyText(JSON.stringify(content, null, 2))} onRegenerate={onRegenerate} isRefining={isRefining} />
+      <ActionRow onCopy={() => copyText(toReadableText(content))} onRegenerate={onRegenerate} isRefining={isRefining} />
       <RefineRow
         onRefine={onRefine}
         isRefining={isRefining}

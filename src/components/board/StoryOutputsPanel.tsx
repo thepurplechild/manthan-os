@@ -1,10 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Copy, ChevronDown, ChevronRight, Loader2, MessageSquare, Pencil, RefreshCw, Send } from 'lucide-react'
+import { Copy, ChevronDown, ChevronRight, Download, Loader2, MessageSquare, Pencil, RefreshCw, Send, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 
 type Brain = {
@@ -42,11 +43,53 @@ interface StoryOutputs {
 
 interface StoryOutputsPanelProps {
   projectId: string
+  projectTitle?: string
   brain: Brain
   suggestions: Suggestion[]
   initialMessages: Message[]
   outputs: StoryOutputs
   onReanalyse: () => Promise<void>
+}
+
+function formatContent(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (typeof content === 'object' && content !== null) {
+    const c = content as Record<string, unknown>
+    const parts: string[] = []
+    if (c.title) parts.push(String(c.title))
+    if (c.logline) parts.push(`Logline\n${c.logline}`)
+    if (c.synopsis) parts.push(`Synopsis\n${c.synopsis}`)
+    if (c.genreAndTone) {
+      const g = c.genreAndTone as Record<string, unknown>
+      const primary = g.primaryGenre ? String(g.primaryGenre) : ''
+      const subs = Array.isArray(g.subGenres) ? (g.subGenres as string[]).join(', ') : ''
+      const tone = Array.isArray(g.tone) ? (g.tone as string[]).join(', ') : ''
+      parts.push(`Genre & Tone\n${[primary, subs, tone].filter(Boolean).join(' — ')}`)
+    } else if (c.genre) {
+      parts.push(`Genre\n${String(c.genre)}`)
+    }
+    if (c.themes) {
+      const themes = Array.isArray(c.themes) ? (c.themes as string[]).join('\n• ') : String(c.themes)
+      parts.push(`Themes\n• ${themes}`)
+    }
+    if (c.characters) {
+      if (Array.isArray(c.characters)) {
+        const charLines = (c.characters as Array<Record<string, unknown>>).map(
+          (ch) => `${ch.name || 'Unknown'} · ${ch.role || ''} · ${ch.arc || ch.description || ''}`
+        )
+        parts.push(`Characters\n${charLines.join('\n')}`)
+      } else {
+        parts.push(`Characters\n${String(c.characters)}`)
+      }
+    }
+    if (parts.length === 0) {
+      return Object.entries(c)
+        .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+        .join('\n')
+    }
+    return parts.join('\n\n')
+  }
+  return String(content)
 }
 
 const dimensionKeys = ['audience', 'themes', 'character', 'world', 'stakes']
@@ -89,6 +132,7 @@ function extractCharacters(cb: unknown): Array<{ name: string; role?: string; ar
 
 export function StoryOutputsPanel({
   projectId,
+  projectTitle = 'Untitled',
   brain,
   suggestions: initialSuggestions,
   initialMessages,
@@ -105,6 +149,8 @@ export function StoryOutputsPanel({
   const [reanalysing, setReanalysing] = useState(false)
   const [expandedSuggestion, setExpandedSuggestion] = useState<string | null>(null)
   const [summaryExpanded, setSummaryExpanded] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [pitchText, setPitchText] = useState<string | null>(null)
 
   useEffect(() => {
     if (chatOpen) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -165,6 +211,88 @@ export function StoryOutputsPanel({
       setReanalysing(false)
     }
   }, [onReanalyse])
+
+  const generatePitch = useCallback(async () => {
+    setGenerating(true)
+    try {
+      const supabase = createClient()
+      const { data: docs } = await supabase
+        .from('documents')
+        .select('id')
+        .eq('project_id', projectId)
+        .in('processing_status', ['COMPLETED', 'READY'])
+        .order('is_primary', { ascending: false })
+        .order('created_at', { ascending: true })
+        .limit(1)
+
+      const doc = docs?.[0]
+      if (!doc) {
+        toast.error('No processed document found')
+        setGenerating(false)
+        return
+      }
+
+      const [
+        { generateLoglines },
+        { generateSynopsis },
+        { generateCharacterBible },
+        { generateOnePager },
+      ] = await Promise.all([
+        import('@/app/actions/loglines'),
+        import('@/app/actions/synopsis'),
+        import('@/app/actions/characterBible'),
+        import('@/app/actions/onePager'),
+      ])
+
+      const [l, s, c, o] = await Promise.all([
+        generateLoglines(doc.id),
+        generateSynopsis(doc.id),
+        generateCharacterBible(doc.id),
+        generateOnePager(doc.id),
+      ])
+
+      const logline = l?.data?.loglines?.[0]?.text || outputs.logline || ''
+      const synopsis = s?.data?.long || s?.data?.short || outputs.synopsis || ''
+      const charData = c?.data || outputs.characterBreakdown
+      const onePagerData = o?.data || outputs.onePager
+
+      const charText = charData
+        ? extractCharacters(charData)
+            .map((ch) => `${ch.name} · ${ch.role || ''} · ${ch.arc || ''}`)
+            .join('\n')
+        : ''
+
+      const themesText = brain?.known_dimensions?.themes
+        ? brain.known_dimensions.themes
+            .split(',')
+            .map((t: string) => `• ${t.trim()}`)
+            .join('\n')
+        : ''
+
+      const onePagerText = onePagerData ? formatContent(onePagerData) : ''
+
+      const parts = [
+        projectTitle.toUpperCase(),
+        '',
+        'LOGLINE',
+        logline,
+        '',
+        'SYNOPSIS',
+        synopsis,
+        '',
+        charText ? `CHARACTERS\n${charText}` : '',
+        themesText ? `THEMES\n${themesText}` : '',
+        onePagerText ? `ONE-PAGER\n${onePagerText}` : '',
+      ].filter(Boolean)
+
+      setPitchText(parts.join('\n\n'))
+    } catch (err) {
+      console.error('Pitch generation failed:', err)
+      toast.error('Pitch generation failed')
+    } finally {
+      setGenerating(false)
+    }
+  }, [projectId, projectTitle, outputs, brain]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeSuggestions = suggestions.filter((s) => s.status === 'active')
   const firstQuestion = activeSuggestions[0]
@@ -313,14 +441,30 @@ export function StoryOutputsPanel({
         </div>
       )}
 
+      {/* One-Pager */}
+      {outputs.onePager != null && (
+        <div className="group/section border-b border-[#1A1A1A] p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] uppercase tracking-[0.15em] text-[#C8A97E]">One-Pager</span>
+            <div className="flex items-center gap-2">
+              <Pencil className="h-3 w-3 text-[#333333] opacity-0 group-hover/section:opacity-100 transition-opacity" />
+              <button type="button" onClick={() => copyText(formatContent(outputs.onePager))} className="text-[#555555] hover:text-[#C8A97E]">
+                <Copy className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-[#E5E5E5] leading-relaxed whitespace-pre-wrap line-clamp-6">{formatContent(outputs.onePager)}</p>
+        </div>
+      )}
+
       {/* Generate Full Pitch */}
       <div className="border-b border-[#1A1A1A] p-4">
         <Button
-          onClick={handleReanalyse}
-          disabled={reanalysing}
+          onClick={generatePitch}
+          disabled={generating}
           className="w-full bg-[#C8A97E] text-[#0A0A0A] hover:bg-[#b8976a]"
         >
-          {reanalysing ? (
+          {generating ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Generating...
             </>
@@ -331,6 +475,43 @@ export function StoryOutputsPanel({
           )}
         </Button>
       </div>
+
+      {/* Pitch overlay */}
+      {pitchText && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => setPitchText(null)}>
+          <div className="relative w-full max-w-3xl max-h-[90vh] rounded-[12px] border border-[#1E1E1E] bg-[#111111] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-[#1A1A1A] px-6 py-4">
+              <span className="text-[10px] uppercase tracking-[0.15em] text-[#C8A97E]">Pitch Package</span>
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={() => copyText(pitchText)} className="flex items-center gap-1 text-xs text-[#C8A97E] hover:text-[#E5E5E5]">
+                  <Copy className="h-3 w-3" /> Copy All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const blob = new Blob([pitchText], { type: 'text/plain' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `${projectTitle.replace(/\s+/g, '-').toLowerCase()}-pitch.txt`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  }}
+                  className="flex items-center gap-1 text-xs text-[#C8A97E] hover:text-[#E5E5E5]"
+                >
+                  <Download className="h-3 w-3" /> Download
+                </button>
+                <button type="button" onClick={() => setPitchText(null)} className="text-[#666666] hover:text-[#E5E5E5]">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <ScrollArea className="flex-1 p-6">
+              <pre className="whitespace-pre-wrap text-sm text-[#E5E5E5] leading-relaxed font-sans">{pitchText}</pre>
+            </ScrollArea>
+          </div>
+        </div>
+      )}
 
       {/* Chat */}
       <div className="p-4 space-y-2">
