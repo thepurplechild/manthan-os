@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Copy, ChevronDown, ChevronRight, Loader2, MessageSquare, RefreshCw, Send } from 'lucide-react'
+import { Copy, ChevronDown, ChevronRight, Loader2, MessageSquare, Pencil, RefreshCw, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -247,12 +247,15 @@ export function StoryOutputsPanel({
 
       {/* Logline */}
       {outputs.logline && (
-        <div className="border-b border-[#1A1A1A] p-4 space-y-2">
+        <div className="group/section border-b border-[#1A1A1A] p-4 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[9px] uppercase tracking-[0.15em] text-[#C8A97E]">Logline</span>
-            <button type="button" onClick={() => copyText(outputs.logline!)} className="text-[#555555] hover:text-[#C8A97E]">
-              <Copy className="h-3 w-3" />
-            </button>
+            <div className="flex items-center gap-2">
+              <Pencil className="h-3 w-3 text-[#333333] opacity-0 group-hover/section:opacity-100 transition-opacity" />
+              <button type="button" onClick={() => copyText(outputs.logline!)} className="text-[#555555] hover:text-[#C8A97E]">
+                <Copy className="h-3 w-3" />
+              </button>
+            </div>
           </div>
           <p className="border-l-2 border-l-[#C8A97E] pl-3 text-sm text-[#E5E5E5] font-light leading-[1.8]">{outputs.logline}</p>
         </div>
@@ -260,12 +263,15 @@ export function StoryOutputsPanel({
 
       {/* Synopsis */}
       {outputs.synopsis && (
-        <div className="border-b border-[#1A1A1A] p-4 space-y-2">
+        <div className="group/section border-b border-[#1A1A1A] p-4 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[9px] uppercase tracking-[0.15em] text-[#C8A97E]">Synopsis</span>
-            <button type="button" onClick={() => copyText(outputs.synopsis!)} className="text-[#555555] hover:text-[#C8A97E]">
-              <Copy className="h-3 w-3" />
-            </button>
+            <div className="flex items-center gap-2">
+              <Pencil className="h-3 w-3 text-[#333333] opacity-0 group-hover/section:opacity-100 transition-opacity" />
+              <button type="button" onClick={() => copyText(outputs.synopsis!)} className="text-[#555555] hover:text-[#C8A97E]">
+                <Copy className="h-3 w-3" />
+              </button>
+            </div>
           </div>
           <p className={`text-xs text-[#E5E5E5] leading-relaxed whitespace-pre-wrap ${synopsisExpanded ? '' : 'line-clamp-4'}`}>
             {outputs.synopsis}
@@ -282,8 +288,11 @@ export function StoryOutputsPanel({
 
       {/* Characters */}
       {characters.length > 0 && (
-        <div className="border-b border-[#1A1A1A] p-4 space-y-2">
-          <span className="text-[9px] uppercase tracking-[0.15em] text-[#C8A97E]">Characters</span>
+        <div className="group/section border-b border-[#1A1A1A] p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] uppercase tracking-[0.15em] text-[#C8A97E]">Characters</span>
+            <Pencil className="h-3 w-3 text-[#333333] opacity-0 group-hover/section:opacity-100 transition-opacity" />
+          </div>
           {characters.map((c) => (
             <div key={c.name} className="flex items-center gap-2 py-1">
               <span className="text-xs text-[#C8A97E]">{c.name}</span>

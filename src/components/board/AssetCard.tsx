@@ -49,12 +49,22 @@ function StatusDot({ status }: { status: string }) {
 
 export function AssetCard({ document: doc, onDelete, onClick }: AssetCardProps) {
   const [isExtracting, setIsExtracting] = useState(false)
-  const [extraction, setExtraction] = useState<AssetExtraction | null>(doc.asset_metadata as AssetExtraction | null)
+  const [extraction, setExtraction] = useState<AssetExtraction | null>(
+    doc.asset_metadata && typeof doc.asset_metadata === 'object' && Object.keys(doc.asset_metadata).length > 0
+      ? (doc.asset_metadata as AssetExtraction)
+      : null
+  )
 
   useEffect(() => {
+    if (doc.asset_metadata && typeof doc.asset_metadata === 'object' && Object.keys(doc.asset_metadata).length > 0) {
+      setExtraction(doc.asset_metadata as AssetExtraction)
+    }
+  }, [doc.asset_metadata])
+
+  useEffect(() => {
+    const status = (doc.processing_status || '').toUpperCase()
     if (
-      (doc.processing_status === 'READY' || doc.processing_status === 'COMPLETED') &&
-      !doc.asset_metadata &&
+      (status === 'READY' || status === 'COMPLETED') &&
       !extraction &&
       !isExtracting
     ) {
@@ -84,7 +94,7 @@ export function AssetCard({ document: doc, onDelete, onClick }: AssetCardProps) 
 
   return (
     <div
-      className="group rounded-[8px] border border-[#1E1E1E] bg-[#111111] p-4 cursor-pointer transition-colors hover:border-[#2A2A2A] hover:bg-[#131313] break-inside-avoid mb-4"
+      className="group rounded-[8px] border border-[#1E1E1E] bg-[#111111] p-4 cursor-pointer transition-all hover:border-[#C8A97E]/40 hover:bg-[#131313] break-inside-avoid mb-4"
       onClick={onClick}
     >
       {/* Header */}
@@ -176,10 +186,15 @@ export function AssetCard({ document: doc, onDelete, onClick }: AssetCardProps) 
       )}
 
       {/* Footer */}
-      <div className="mt-3 flex items-center gap-2 text-[9px] text-[#444444]">
-        <span>{formatFileSize(doc.file_size_bytes || 0)}</span>
-        <span>·</span>
-        <span>{formatDistanceToNow(new Date(doc.created_at), { addSuffix: true })}</span>
+      <div className="mt-3 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-[9px] text-[#444444]">
+          <span>{formatFileSize(doc.file_size_bytes || 0)}</span>
+          <span>·</span>
+          <span>{formatDistanceToNow(new Date(doc.created_at), { addSuffix: true })}</span>
+        </div>
+        <span className="text-[10px] text-[#C8A97E] opacity-0 group-hover:opacity-100 transition-opacity">
+          View & Edit →
+        </span>
       </div>
     </div>
   )

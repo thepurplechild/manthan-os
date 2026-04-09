@@ -208,23 +208,26 @@ export function ProjectBoard({
       {/* Left: Board */}
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <div className="flex h-14 items-center justify-between border-b border-[#1A1A1A] px-6 shrink-0">
-          <div className="flex items-center gap-4 min-w-0">
-            <Link
-              href="/dashboard/projects"
-              className="inline-flex items-center text-sm text-[#C8A97E] hover:text-[#E5E5E5] shrink-0"
-            >
-              <ArrowLeft className="h-4 w-4 mr-1.5" />
-              Projects
-            </Link>
-            <h1 className="text-lg font-light text-[#E5E5E5] truncate">{projectTitle}</h1>
-          </div>
-          {isAnalysing && (
-            <div className="flex items-center gap-2 text-xs text-[#C8A97E] shrink-0">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Analysing...
+        <div className="border-b border-[#1A1A1A] px-6 py-3 shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4 min-w-0">
+              <Link
+                href="/dashboard/projects"
+                className="inline-flex items-center text-sm text-[#C8A97E] hover:text-[#E5E5E5] shrink-0"
+              >
+                <ArrowLeft className="h-4 w-4 mr-1.5" />
+                Projects
+              </Link>
+              <h1 className="text-lg font-light text-[#E5E5E5] truncate">{projectTitle}</h1>
             </div>
-          )}
+            {isAnalysing && (
+              <div className="flex items-center gap-2 text-xs text-[#C8A97E] shrink-0">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Analysing...
+              </div>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-[#444444] italic">Drop files to build your story — click any card to view and edit</p>
         </div>
 
         {/* Board area */}
