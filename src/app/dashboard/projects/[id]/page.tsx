@@ -3,10 +3,8 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { revalidatePath } from 'next/cache'
-import { AssetPanel } from '@/components/brain/AssetPanel'
-import { BrainPanel } from '@/components/brain/BrainPanel'
-import { StoryPackagePanel } from '@/components/brain/StoryPackagePanel'
 import { ReanalyseButton } from '@/components/brain/ReanalyseButton'
+import { StoryCanvas } from '@/components/canvas/StoryCanvas'
 
 interface ProjectPageProps {
   params: Promise<{ id: string }>
@@ -17,10 +15,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   const supabase = await createClient()
 
   const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    redirect('/login')
-  }
+  if (authError || !user) redirect('/login')
 
   const { data: project, error: projectError } = await supabase
     .from('projects')
@@ -29,9 +24,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     .eq('owner_id', user.id)
     .single()
 
-  if (projectError || !project) {
-    notFound()
-  }
+  if (projectError || !project) notFound()
 
   const { data: assets } = await supabase
     .from('documents')
@@ -40,13 +33,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     .eq('owner_id', user.id)
     .order('created_at', { ascending: false })
 
-  const { data: documentsForIds } = await supabase
-    .from('documents')
-    .select('id')
-    .eq('project_id', id)
-    .eq('owner_id', user.id)
-
-  const documentIds = (documentsForIds || []).map((doc) => doc.id)
+  const documentIds = (assets || []).map((doc) => doc.id)
 
   const { data: brain } = await supabase
     .from('project_brain')
@@ -68,80 +55,77 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     .order('created_at', { ascending: true })
     .limit(50)
 
+  const { data: outputs } = documentIds.length > 0
+    ? await supabase
+        .from('script_analysis_outputs')
+        .select('id, output_type, content, created_at')
+        .in('document_id', documentIds)
+        .eq('status', 'GENERATED')
+        .order('created_at', { ascending: false })
+    : { data: [] }
+
   async function onAssetAdded() {
     'use server'
     revalidatePath(`/dashboard/projects/${id}`)
   }
 
-  async function onAnalysisComplete() {
-    'use server'
-    revalidatePath(`/dashboard/projects/${id}`)
-  }
-
-  async function onOutputsRegenerated() {
-    'use server'
-    revalidatePath(`/dashboard/projects/${id}`)
-  }
-
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-[#E5E5E5]">
-      <div className="px-6 py-5 border-b border-[#1A1A1A]">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <Link href="/dashboard/projects" className="inline-flex items-center text-sm text-[#C8A97E] hover:text-[#E5E5E5]">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Projects
-            </Link>
-            <h1 className="mt-3 text-3xl font-light text-[#E5E5E5]">{project.title}</h1>
-            {project.description && <p className="mt-1 text-sm text-[#666666]">{project.description}</p>}
-          </div>
-          <ReanalyseButton projectId={project.id} />
+    <div className="h-screen flex flex-col bg-[#0A0A0A] text-[#E5E5E5] overflow-hidden">
+      <div className="flex items-center justify-between gap-4 border-b border-[#1A1A1A] px-6 py-3 shrink-0">
+        <div className="flex items-center gap-4 min-w-0">
+          <Link href="/dashboard/projects" className="inline-flex items-center text-sm text-[#C8A97E] hover:text-[#E5E5E5] shrink-0">
+            <ArrowLeft className="h-4 w-4 mr-1.5" />
+            Projects
+          </Link>
+          <h1 className="text-lg font-light text-[#E5E5E5] truncate">{project.title}</h1>
         </div>
+        <ReanalyseButton projectId={project.id} />
       </div>
 
-      <div className="flex h-[calc(100vh-10rem)] bg-[#0A0A0A] overflow-hidden flex-col lg:flex-row">
-        <div className="w-full lg:w-64 flex-shrink-0 border-r border-[#1A1A1A] overflow-y-auto">
-          <AssetPanel
-            projectId={project.id}
-            assets={assets || []}
-            onAssetAdded={onAssetAdded}
-            onAnalysisComplete={onAnalysisComplete}
-          />
-        </div>
-
-        <div className="flex-1 overflow-hidden">
-          <BrainPanel
-            projectId={project.id}
-            initialBrain={(brain as {
-              story_summary: string
-              known_dimensions: Record<string, string>
-              identified_gaps: string[]
-              contradictions: unknown[]
-              synthesised_context: string
-              last_analysed_at: string
-            } | null) || null}
-            initialSuggestions={(suggestions as Array<{
-              id: string
-              suggestion_type: string
-              title: string
-              body: string
-              options: string[]
-              status: string
-            }>) || []}
-            initialMessages={(messages as Array<{
-              id: string
-              role: string
-              content: string
-              message_type: string
-              created_at: string
-            }>) || []}
-            onOutputsRegenerated={onOutputsRegenerated}
-          />
-        </div>
-
-        <div className="w-full lg:w-80 flex-shrink-0 border-l border-[#1A1A1A] overflow-y-auto">
-          <StoryPackagePanel projectId={project.id} documentIds={documentIds} />
-        </div>
+      <div className="flex-1 overflow-hidden">
+        <StoryCanvas
+          projectId={project.id}
+          projectTitle={project.title}
+          projectDescription={project.description || ''}
+          initialBrain={(brain as {
+            story_summary: string
+            known_dimensions: Record<string, string>
+            identified_gaps: string[]
+            contradictions: unknown[]
+            synthesised_context: string
+            last_analysed_at: string
+          } | null) || null}
+          initialSuggestions={(suggestions as Array<{
+            id: string
+            suggestion_type: string
+            title: string
+            body: string
+            options: string[]
+            status: string
+          }>) || []}
+          initialMessages={(messages as Array<{
+            id: string
+            role: string
+            content: string
+            message_type: string
+            created_at: string
+          }>) || []}
+          initialDocuments={(assets as Array<{
+            id: string
+            title: string
+            asset_type: string
+            processing_status: string
+            file_size_bytes: number
+            created_at: string
+          }>) || []}
+          initialOutputs={(outputs as Array<{
+            id: string
+            output_type: string
+            content: unknown
+            created_at: string
+          }>) || []}
+          onAssetAdded={onAssetAdded}
+        />
       </div>
     </div>
   )
