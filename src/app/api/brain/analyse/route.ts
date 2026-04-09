@@ -41,6 +41,15 @@ export async function POST(request: NextRequest) {
       .not('extracted_text', 'is', null)
       .in('processing_status', ['COMPLETED', 'READY'])
 
+    console.log('Project documents found:',
+      projectDocuments?.length,
+      projectDocuments?.map(d => ({
+        title: d.title,
+        textLength: d.extracted_text?.length,
+        status: d.processing_status
+      }))
+    )
+
     if (!projectDocuments || projectDocuments.length === 0) {
       return NextResponse.json({
         brain: null,
@@ -138,6 +147,10 @@ Analyse all assets and return your synthesis as JSON.`
       )
     }
 
+    console.log('Synthesis result:',
+      JSON.stringify(synthesis, null, 2).slice(0, 500)
+    )
+
     // Upsert project_brain
     const { data: brain, error: brainError } = await supabase
       .from('project_brain')
@@ -153,6 +166,10 @@ Analyse all assets and return your synthesis as JSON.`
       }, { onConflict: 'project_id' })
       .select()
       .single()
+
+    console.log('Brain upsert result:',
+      brainError ? brainError.message : 'success'
+    )
 
     if (brainError) {
       console.error('Brain upsert error:', brainError)
