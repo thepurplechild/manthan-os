@@ -138,7 +138,13 @@ Analyse all assets and return your synthesis as JSON.`
 
     let synthesis
     try {
-      synthesis = JSON.parse(rawText.trim())
+      const cleaned = rawText
+        .trim()
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/```\s*$/i, '')
+        .trim()
+      synthesis = JSON.parse(cleaned)
     } catch {
       console.error('Brain synthesis parse failed:', rawText)
       return NextResponse.json(
