@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import { ProjectBoard } from '@/components/board/ProjectBoard'
+import { getProjectWorld } from '@/app/actions/projectWorld'
 
 interface ProjectPageProps {
   params: Promise<{ id: string }>
@@ -84,10 +85,18 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     onePager: latestByType.ONE_PAGER?.content ?? undefined,
   }
 
+  let world = null
+  try {
+    world = await getProjectWorld(id)
+  } catch {
+    // project_world table may not exist yet
+  }
+
   return (
     <ProjectBoard
       projectId={project.id}
       projectTitle={project.title}
+      projectDescription={project.description || ''}
       initialDocuments={
         (documents as Array<{
           id: string
@@ -131,6 +140,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         }>) || []
       }
       initialOutputs={outputs}
+      initialWorld={world}
     />
   )
 }

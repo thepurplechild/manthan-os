@@ -1,9 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { FileText, Clock, CheckCircle, Sparkles } from 'lucide-react'
+import { ProjectCard } from '@/components/dashboard/ProjectCard'
+import { logout } from '@/app/actions/auth'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -11,116 +10,136 @@ export default async function DashboardPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
-  if (!user) {
-    redirect('/login')
-  }
+  const email = user.email || ''
+  const initial = email.charAt(0).toUpperCase()
 
-  // Fetch user profile
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name')
-    .eq('id', user.id)
-    .single()
-
-  // Fetch document stats
-  const { count: totalDocs } = await supabase
-    .from('documents')
-    .select('*', { count: 'exact', head: true })
+  const { data: projects } = await supabase
+    .from('projects')
+    .select('id, title, description, updated_at')
     .eq('owner_id', user.id)
+    .order('updated_at', { ascending: false })
 
-  const { count: processingDocs } = await supabase
-    .from('documents')
-    .select('*', { count: 'exact', head: true })
-    .eq('owner_id', user.id)
-    .eq('processing_status', 'PROCESSING')
+  const projectList = projects || []
 
-  const { count: completedDocs } = await supabase
-    .from('documents')
-    .select('*', { count: 'exact', head: true })
-    .eq('owner_id', user.id)
-    .eq('processing_status', 'COMPLETED')
+  const projectData = await Promise.all(
+    projectList.map(async (p) => {
+      const { count } = await supabase
+        .from('documents')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', p.id)
+        .eq('owner_id', user.id)
 
-  const stats = [
-    {
-      title: 'Total Documents',
-      value: totalDocs || 0,
-      icon: FileText,
-      color: 'text-blue-600',
-    },
-    {
-      title: 'Processing',
-      value: processingDocs || 0,
-      icon: Clock,
-      color: 'text-yellow-600',
-    },
-    {
-      title: 'Completed',
-      value: completedDocs || 0,
-      icon: CheckCircle,
-      color: 'text-green-600',
-    },
-  ]
+      const { data: docs } = await supabase
+        .from('documents')
+        .select('id, asset_metadata')
+        .eq('project_id', p.id)
+        .eq('owner_id', user.id)
+
+      const docIds = (docs || []).map((d) => d.id)
+
+      let logline: string | null = null
+      if (docIds.length > 0) {
+        const { data: outputs } = await supabase
+          .from('script_analysis_outputs')
+          .select('content')
+          .in('document_id', docIds)
+          .eq('output_type', 'LOGLINES')
+          .eq('status', 'GENERATED')
+          .order('created_at', { ascending: false })
+          .limit(1)
+
+        if (outputs?.[0]?.content) {
+          const c = outputs[0].content as { loglines?: Array<{ text?: string }> } | string
+          logline = typeof c === 'string' ? c : c?.loglines?.find((l) => l?.text)?.text || null
+        }
+      }
+
+      const characterNames: string[] = []
+      for (const doc of docs || []) {
+        const meta = doc.asset_metadata as Record<string, unknown> | null
+        if (meta && Array.isArray(meta.characters)) {
+          for (const ch of meta.characters as Array<{ name?: string }>) {
+            if (ch.name && !characterNames.includes(ch.name)) {
+              characterNames.push(ch.name)
+            }
+          }
+        }
+      }
+
+      return {
+        ...p,
+        documentCount: count || 0,
+        logline,
+        characterNames,
+      }
+    })
+  )
 
   return (
-    <div className="space-y-8">
-      <Card className="border-amber-200 bg-amber-50/70">
-        <CardContent className="py-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-amber-700" />
-              Start with New Story
-            </h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              Open Manthan conversation mode to shape an idea into a complete story package.
-            </p>
+    <div className="min-h-screen bg-[#0A0A0A] text-[#E5E5E5]">
+      {/* Header */}
+      <header className="flex items-center justify-between h-16 px-6 border-b border-[#161616]">
+        <span className="text-[13px] text-[#C8A97E] uppercase tracking-[0.15em] font-medium">
+          Manthan OS
+        </span>
+        <form action={logout}>
+          <button
+            type="submit"
+            className="flex items-center gap-2 group"
+          >
+            <span className="flex items-center justify-center h-8 w-8 rounded-full bg-[#1A1A1A] text-[#E5E5E5] text-sm font-medium">
+              {initial}
+            </span>
+            <span className="text-xs text-[#555555] group-hover:text-[#E5E5E5] transition-colors hidden sm:inline">
+              Sign out
+            </span>
+          </button>
+        </form>
+      </header>
+
+      {projectList.length === 0 ? (
+        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-64px)]">
+          <h2 className="text-[2rem] font-extralight text-[#E5E5E5] mb-2">
+            Your stories live here.
+          </h2>
+          <p className="text-sm text-[#555555] mb-8">
+            Start by telling Manthan about one.
+          </p>
+          <Link
+            href="/dashboard/new"
+            className="inline-block bg-[#C8A97E] text-[#0A0A0A] font-medium text-sm px-6 py-3 rounded-[4px] hover:brightness-110 transition"
+          >
+            Begin a new story →
+          </Link>
+        </div>
+      ) : (
+        <div className="max-w-5xl mx-auto px-6 py-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-light text-[#E5E5E5]">Your Stories</h2>
+            <Link
+              href="/dashboard/new"
+              className="inline-block bg-[#C8A97E] text-[#0A0A0A] font-medium text-sm px-4 py-2 rounded-[4px] hover:brightness-110 transition"
+            >
+              + New Story
+            </Link>
           </div>
-          <Button asChild size="lg">
-            <Link href="/dashboard/new">New Story</Link>
-          </Button>
-        </CardContent>
-      </Card>
-
-      <div>
-        <h1 className="text-3xl font-bold">Welcome back, {profile?.full_name || 'there'}!</h1>
-        <p className="text-muted-foreground mt-2">
-         Here&apos;s an overview of your document processing activity.
-        </p>
-      </div>
-
-      {/* Global Semantic Search would need to be implemented separately
-          For now, semantic search is available in individual document views */}
-
-      <div className="grid gap-4 md:grid-cols-3">
-        {stats.map((stat) => {
-          const Icon = stat.icon
-          return (
-            <Card key={stat.title}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                <Icon className={`h-4 w-4 ${stat.color}`} />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
-
-      {totalDocs === 0 && (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No documents yet</h3>
-            <p className="text-sm text-muted-foreground mb-6 max-w-sm">
-              Get started by uploading your first document to begin processing and analysis.
-            </p>
-            <Button asChild size="lg">
-              <Link href="/dashboard/upload">Upload your first document</Link>
-            </Button>
-          </CardContent>
-        </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {projectData.map((p) => (
+              <ProjectCard
+                key={p.id}
+                id={p.id}
+                title={p.title}
+                description={p.description}
+                logline={p.logline}
+                documentCount={p.documentCount}
+                characterNames={p.characterNames}
+                updatedAt={p.updated_at}
+              />
+            ))}
+          </div>
+        </div>
       )}
     </div>
   )

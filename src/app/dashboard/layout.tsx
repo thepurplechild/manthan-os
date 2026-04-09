@@ -73,9 +73,14 @@ export default function DashboardLayout({
     }
   }
 
-  const isProjectBoard = Boolean(pathname.match(/\/dashboard\/projects\/[a-f0-9-]{36}$/))
+  const noSidebarPages = [
+    /^\/dashboard$/,
+    /^\/dashboard\/new/,
+    /^\/dashboard\/projects\/[a-f0-9-]{36}/,
+  ]
+  const isNoSidebar = noSidebarPages.some((pattern) => pattern.test(pathname))
 
-  if (isProjectBoard) {
+  if (isNoSidebar) {
     return <>{children}</>
   }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDropzone } from 'react-dropzone'
 import { createClient } from '@/lib/supabase/client'
@@ -8,7 +8,6 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
 import { Sparkles, Upload } from 'lucide-react'
 import { saveStoryProject, type Message, type GeneratedOutputs } from '@/app/actions/conversation'
 import { generateLoglines } from '@/app/actions/loglines'
@@ -98,12 +97,6 @@ export function WriterConversationExperience({ projectId }: WriterConversationEx
     }
     void bootstrapProjectContext()
   }, [projectId])
-
-  const dimensionProgress = useMemo(() => {
-    const fields = ['audience', 'themes', 'character', 'world', 'stakes'] as const
-    const complete = fields.filter((f) => knownDimensions[f] === true).length
-    return { complete, total: fields.length, percent: Math.round((complete / fields.length) * 100) }
-  }, [knownDimensions])
 
   const updateDimensions = async (history: Message[]) => {
     if (history.length < 2) return
@@ -621,47 +614,47 @@ export function WriterConversationExperience({ projectId }: WriterConversationEx
   })
 
   return (
-    <div className="min-h-[calc(100vh-7rem)] bg-[#0A0A0A] p-6 md:p-8">
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <div className="lg:col-span-3 space-y-4">
-          <div>
-            <div className="text-[#C8A97E] text-xs tracking-[0.22em] uppercase">Manthan OS</div>
+    <div className="min-h-screen bg-[#0A0A0A] text-[#E5E5E5]">
+      <div className="flex flex-col lg:flex-row min-h-screen">
+        {/* Left — conversation */}
+        <div className="flex-1 flex flex-col min-w-0 lg:w-[60%]">
+          <div className="px-6 pt-6 pb-2 shrink-0">
+            <div className="text-[13px] text-[#C8A97E] uppercase tracking-[0.15em] font-medium">Manthan OS</div>
             {projectId && projectTitle && (
               <div className="mt-1 text-[#C8A97E] text-xs tracking-[0.12em] uppercase">
                 Continuing: {projectTitle}
               </div>
             )}
-            <h1 className="mt-2 text-white text-[2.5rem] font-light leading-tight">New Story</h1>
+            <h1 className="mt-4 text-white text-[2.5rem] font-extralight leading-tight">New Story</h1>
           </div>
 
-          <div className="space-y-4">
-            <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1">
-              {messages.length === 0 ? (
-                <div className="text-[#666666] text-sm">
-                  Start with anything: a feeling, a character, a conflict, or a world.
-                </div>
-              ) : (
-                messages.map((message, idx) => (
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            {messages.length > 0 && (
+              <div className="space-y-4">
+                {messages.map((message, idx) => (
                   <div key={`${message.role}-${idx}`} className={`flex ${message.role === 'writer' ? 'justify-end' : 'justify-start'}`}>
-                    <div className="max-w-[85%]">
+                    <div className={message.role === 'writer' ? 'max-w-[75%]' : 'max-w-[80%]'}>
                       {message.role === 'manthan' && (
-                        <div className="mb-1 text-[10px] uppercase tracking-[0.16em] text-[#C8A97E]">Manthan</div>
+                        <div className="mb-1 text-[9px] uppercase tracking-[0.15em] text-[#C8A97E]">Manthan</div>
                       )}
                       <div
-                        className={`px-4 py-3 text-sm whitespace-pre-wrap rounded-[8px] ${
+                        className={`px-4 py-3 text-sm whitespace-pre-wrap ${
                           message.role === 'writer'
-                            ? 'bg-[#1A1A1A] text-[#E5E5E5] ml-auto max-w-[80%]'
-                            : 'bg-[#111111] border-l-2 border-l-[#C8A97E] text-[#E5E5E5]'
+                            ? 'rounded-[8px] bg-[#1A1A1A] text-[#E5E5E5]'
+                            : 'border-l-2 border-l-[#C8A97E] pl-3.5 text-[#E5E5E5]'
                         }`}
                       >
                         {message.content}
                       </div>
                     </div>
                   </div>
-                ))
-              )}
-              {thinking && <div className="text-[#666666] text-sm animate-pulse">Manthan is thinking...</div>}
-            </div>
+                ))}
+
+                {thinking && (
+                  <div className="text-[13px] text-[#C8A97E] animate-pulse">Manthan is thinking...</div>
+                )}
+              </div>
+            )}
 
             {conversationError && (
               <div className="rounded-[8px] border border-[#2A2A2A] bg-[#111111] p-3 text-sm text-[#E5E5E5]">
@@ -675,52 +668,62 @@ export function WriterConversationExperience({ projectId }: WriterConversationEx
                 </Button>
               </div>
             )}
+          </div>
 
+          {/* Input area — pinned to bottom */}
+          <div className="px-6 pb-6 pt-2 shrink-0 space-y-3 border-t border-[#161616]">
             <Textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              className="min-h-36 rounded-[8px] border-[#2A2A2A] bg-[#111111] p-5 text-white placeholder:text-[#555555] focus-visible:ring-0 focus-visible:border-[#C8A97E]/50"
-              placeholder="What's your story about? Tell me anything — a feeling, a character, a situation, a world."
+              className={`rounded-[8px] border-[#2A2A2A] bg-[#111111] p-5 text-white placeholder:text-[#444444] focus-visible:ring-0 focus-visible:border-[#C8A97E]/50 ${
+                messages.length === 0 ? 'min-h-40' : 'min-h-20'
+              }`}
+              placeholder={
+                messages.length === 0
+                  ? "What's your story about? Tell me anything — a feeling, a character, a situation, a world."
+                  : 'Reply to Manthan...'
+              }
             />
 
-            <div
-              {...getRootProps()}
-              className={`rounded-[8px] border border-dashed border-[#2A2A2A] p-4 cursor-pointer transition-colors ${
-                isDragActive ? 'border-[#C8A97E]/30' : 'hover:border-[#C8A97E]/30'
-              }`}
-            >
-              <input {...getInputProps()} />
-              <div className="flex items-center gap-2 text-sm text-[#555555]">
-                <Upload className="h-4 w-4" />
-                <span>Or drop files here - script, screenplay, one-pager, reference images, PDF, Word, PPT</span>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2">
+            {pendingFiles.length > 0 && (
+              <div className="flex flex-wrap gap-2">
                 {pendingFiles.map((file) => (
                   <Badge key={`${file.name}-${file.size}`} variant="secondary" className="rounded-[4px] bg-[#1A1A1A] text-[#E5E5E5]">
                     {file.name}
                   </Badge>
                 ))}
               </div>
+            )}
+
+            <div
+              {...getRootProps()}
+              className={`rounded-[8px] border border-dashed border-[#2A2A2A] px-4 py-3 cursor-pointer transition-colors ${
+                isDragActive ? 'border-[#C8A97E]/30' : 'hover:border-[#C8A97E]/30'
+              }`}
+            >
+              <input {...getInputProps()} />
+              <div className="flex items-center gap-2 text-[13px] text-[#444444]">
+                <Upload className="h-3.5 w-3.5" />
+                <span>+ Drop files — scripts, images, PDFs, Word, PPT</span>
+              </div>
               {readingFiles && (
-                <div className="mt-2 text-[#C8A97E] text-xs animate-pulse">
-                  Reading your files...
-                </div>
+                <div className="mt-2 text-[#C8A97E] text-xs animate-pulse">Reading your files...</div>
               )}
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
               <Button
                 onClick={handleBeginOrReply}
-                className="rounded-[4px] bg-[#C8A97E] text-[#0A0A0A] font-medium hover:brightness-110"
+                className="rounded-[4px] bg-[#C8A97E] text-[#0A0A0A] font-medium px-5 py-2.5 hover:brightness-110"
               >
-                {messages.length === 0 ? 'Begin ->' : 'Send ->'}
+                {messages.length === 0 ? 'Begin →' : 'Send →'}
               </Button>
 
               {(outputs.logline || outputs.synopsis) && (
                 <Button
                   onClick={handleSaveProject}
                   disabled={saveInFlight}
-                  className="rounded-[4px] bg-[#1A1A1A] text-[#E5E5E5] hover:bg-[#222222] border border-[#2A2A2A]"
+                  className="rounded-[4px] bg-[#1A1A1A] text-[#E5E5E5] hover:bg-[#222222] border border-[#2A2A2A] text-[13px]"
                 >
                   {saveInFlight ? 'Saving...' : 'Save as Project'}
                 </Button>
@@ -729,94 +732,104 @@ export function WriterConversationExperience({ projectId }: WriterConversationEx
           </div>
         </div>
 
-        <div className="lg:col-span-2 space-y-4">
-          <div className="rounded-[8px] border border-[#1A1A1A] bg-[#0D0D0D] p-4 space-y-4">
-            <h2 className="text-white text-2xl font-light">Live Outputs</h2>
-            <div className="text-sm text-[#444444]">
-              {(outputs.logline || outputs.synopsis || outputs.onePager)
-                ? 'Your package is updating as the conversation evolves.'
-                : 'Your story package will appear here as we talk.'}
+        {/* Right — live outputs */}
+        <div className="lg:w-[40%] lg:border-l border-[#161616] bg-[#0A0A0A] overflow-y-auto">
+          <div className="p-6 space-y-6">
+            <div>
+              <span className="text-[11px] text-[#C8A97E] uppercase tracking-[0.15em] font-medium">Live Outputs</span>
+              <p className="mt-2 text-sm text-[#444444]">
+                {(outputs.logline || outputs.synopsis || outputs.onePager)
+                  ? 'Your package is updating as the conversation evolves.'
+                  : 'Your story package will appear here as we talk.'}
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs text-[#888888]">
-                <span>Story readiness</span>
-                <span>{dimensionProgress.complete}/5</span>
-              </div>
-              <Progress value={dimensionProgress.percent} className="h-2 bg-[#1A1A1A]" />
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {['Audience', 'Themes', 'Character', 'World', 'Stakes'].map((label) => {
-                  const key = label.toLowerCase()
-                  const isKnown = knownDimensions[key as keyof typeof knownDimensions] === true
-                  return (
-                    <div key={label} className="flex items-center gap-2">
-                      <span className={`h-2 w-2 rounded-full ${isKnown ? 'bg-[#C8A97E]' : 'bg-[#2A2A2A]'}`} />
-                      <span className={isKnown ? 'text-[#C8A97E]' : 'text-[#666666]'}>{label}</span>
-                    </div>
-                  )
-                })}
-              </div>
+            {/* Readiness dots */}
+            <div className="flex items-center gap-4">
+              {['Audience', 'Themes', 'Character', 'World', 'Stakes'].map((label) => {
+                const key = label.toLowerCase()
+                const isKnown = knownDimensions[key as keyof typeof knownDimensions] === true
+                return (
+                  <div key={label} className="flex flex-col items-center gap-1.5">
+                    <span className={`h-2.5 w-2.5 rounded-full ${isKnown ? 'bg-[#C8A97E]' : 'bg-[#2A2A2A]'}`} />
+                    <span className={`text-[9px] uppercase tracking-wider ${isKnown ? 'text-[#C8A97E]' : 'text-[#444444]'}`}>
+                      {label}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
 
             {isGenerating && (
-              <div className="text-sm text-[#666666] animate-pulse flex items-center gap-2">
+              <div className="text-sm text-[#C8A97E] animate-pulse flex items-center gap-2">
                 <Sparkles className="h-4 w-4" />
-                Manthan is thinking...
+                Manthan is generating...
               </div>
             )}
-          </div>
 
-          {refiningType === 'all' && (
-            <div className="rounded-[8px] border border-[#1E1E1E] bg-[#111111] p-3 text-sm text-[#C8A97E] animate-pulse">
-              Updating your story package...
+            {refiningType === 'all' && (
+              <div className="text-sm text-[#C8A97E] animate-pulse">Updating your story package...</div>
+            )}
+
+            {/* Output cards */}
+            <div className="space-y-0">
+              {outputs.logline && (
+                <div className="border-t border-[#161616] pt-5 mt-5">
+                  <LoglineCard
+                    title="LOGLINE"
+                    content={outputs.logline}
+                    onRegenerate={() => handleRegenerate('logline')}
+                    onRefine={(note) => handleRefineOutput('logline', note)}
+                    isRefining={refiningType === 'all' || refiningType === 'logline'}
+                  />
+                </div>
+              )}
+              {outputs.genreTone && (
+                <div className="border-t border-[#161616] pt-5 mt-5">
+                  <GenreToneCard
+                    title="GENRE + TONE"
+                    content={outputs.genreTone}
+                    onRegenerate={() => handleRegenerate('genreTone')}
+                    onRefine={(note) => handleRefineOutput('genreTone', note)}
+                    isRefining={refiningType === 'all' || refiningType === 'genreTone'}
+                  />
+                </div>
+              )}
+              {outputs.characterBreakdown && (
+                <div className="border-t border-[#161616] pt-5 mt-5">
+                  <CharacterCard
+                    title="CHARACTER BREAKDOWN"
+                    content={outputs.characterBreakdown}
+                    onRegenerate={() => handleRegenerate('characterBreakdown')}
+                    onRefine={(note) => handleRefineOutput('characterBreakdown', note)}
+                    isRefining={refiningType === 'all' || refiningType === 'characterBreakdown'}
+                  />
+                </div>
+              )}
+              {outputs.synopsis && (
+                <div className="border-t border-[#161616] pt-5 mt-5">
+                  <SynopsisCard
+                    title="SYNOPSIS"
+                    content={outputs.synopsis}
+                    onRegenerate={() => handleRegenerate('synopsis')}
+                    onRefine={(note) => handleRefineOutput('synopsis', note)}
+                    isRefining={refiningType === 'all' || refiningType === 'synopsis'}
+                  />
+                </div>
+              )}
+              {outputs.onePager && (
+                <div className="border-t border-[#161616] pt-5 mt-5">
+                  <OnePagerCard
+                    title="ONE-PAGER"
+                    content={outputs.onePager}
+                    onRegenerate={() => handleRegenerate('onePager')}
+                    onRefine={(note) => handleRefineOutput('onePager', note)}
+                    isRefining={refiningType === 'all' || refiningType === 'onePager'}
+                  />
+                </div>
+              )}
             </div>
-          )}
-
-          {outputs.logline && (
-            <LoglineCard
-              title="LOGLINE"
-              content={outputs.logline}
-              onRegenerate={() => handleRegenerate('logline')}
-              onRefine={(note) => handleRefineOutput('logline', note)}
-              isRefining={refiningType === 'all' || refiningType === 'logline'}
-            />
-          )}
-          {outputs.genreTone && (
-            <GenreToneCard
-              title="GENRE + TONE"
-              content={outputs.genreTone}
-              onRegenerate={() => handleRegenerate('genreTone')}
-              onRefine={(note) => handleRefineOutput('genreTone', note)}
-              isRefining={refiningType === 'all' || refiningType === 'genreTone'}
-            />
-          )}
-          {outputs.characterBreakdown && (
-            <CharacterCard
-              title="CHARACTER BREAKDOWN"
-              content={outputs.characterBreakdown}
-              onRegenerate={() => handleRegenerate('characterBreakdown')}
-              onRefine={(note) => handleRefineOutput('characterBreakdown', note)}
-              isRefining={refiningType === 'all' || refiningType === 'characterBreakdown'}
-            />
-          )}
-          {outputs.synopsis && (
-            <SynopsisCard
-              title="SYNOPSIS"
-              content={outputs.synopsis}
-              onRegenerate={() => handleRegenerate('synopsis')}
-              onRefine={(note) => handleRefineOutput('synopsis', note)}
-              isRefining={refiningType === 'all' || refiningType === 'synopsis'}
-            />
-          )}
-          {outputs.onePager && (
-            <OnePagerCard
-              title="ONE-PAGER"
-              content={outputs.onePager}
-              onRegenerate={() => handleRegenerate('onePager')}
-              onRefine={(note) => handleRefineOutput('onePager', note)}
-              isRefining={refiningType === 'all' || refiningType === 'onePager'}
-            />
-          )}
+          </div>
         </div>
       </div>
     </div>
