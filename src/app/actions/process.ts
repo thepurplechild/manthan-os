@@ -58,30 +58,26 @@ export async function processDocument(documentId: string) {
     const text = document.extracted_text
     console.log('📝 Server Action: Using extracted text of length:', text.length)
 
-    // Send to OpenAI
-    console.log('🤖 Server Action: Initializing OpenAI client...')
-    const { default: OpenAI } = await import('openai')
+    // Send to Claude
+    console.log('🤖 Server Action: Initializing Anthropic client...')
+    const { default: Anthropic } = await import('@anthropic-ai/sdk')
 
-    const apiKey = process.env.OPENAI_API_KEY
-    console.log('🔑 Server Action: OpenAI API key available:', apiKey ? 'YES' : 'NO')
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    console.log('🔑 Server Action: Anthropic API key available:', apiKey ? 'YES' : 'NO')
     if (!apiKey) {
-      throw new Error('OpenAI API key not found in environment variables')
+      throw new Error('Anthropic API key not found in environment variables')
     }
 
-    const openai = new OpenAI({
+    const anthropic = new Anthropic({
       apiKey: apiKey,
     })
 
-    console.log('🚀 Server Action: Sending request to OpenAI GPT-4o-mini...')
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      response_format: { type: 'json_object' },
+    console.log('🚀 Server Action: Sending request to Claude claude-sonnet-4-20250514...')
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4096,
+      system: 'You are a screenplay analyzer. Extract structured data from scripts and return valid JSON only.',
       messages: [
-        {
-          role: 'system',
-          content:
-            'You are a screenplay analyzer. Extract structured data from scripts and return valid JSON only.',
-        },
         {
           role: 'user',
           content: `Analyze this screenplay and extract:
@@ -102,18 +98,19 @@ ${text.slice(0, 50000)}`,
       ],
     })
 
-    console.log('🎯 Server Action: OpenAI request completed. Response tokens:', completion.usage?.total_tokens || 'unknown')
+    console.log('🎯 Server Action: Claude request completed. Input tokens:', message.usage?.input_tokens || 'unknown')
 
-    const responseContent = completion.choices[0].message.content || '{}'
-    console.log('📦 Server Action: Raw OpenAI response (first 200 chars):', responseContent.substring(0, 200))
+    const textBlock = message.content.find(block => block.type === 'text')
+    const responseContent = textBlock && 'text' in textBlock ? textBlock.text : '{}'
+    console.log('📦 Server Action: Raw Claude response (first 200 chars):', responseContent.substring(0, 200))
 
     let result
     try {
       result = JSON.parse(responseContent)
       console.log('✅ Server Action: Successfully parsed JSON response')
     } catch (parseError) {
-      console.error('❌ Server Action: Failed to parse OpenAI JSON response:', parseError)
-      throw new Error('Invalid JSON response from OpenAI')
+      console.error('❌ Server Action: Failed to parse Claude JSON response:', parseError)
+      throw new Error('Invalid JSON response from Claude')
     }
 
     // Store sections

@@ -1,10 +1,10 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
 interface Character {
@@ -85,7 +85,7 @@ export async function generateCharacterBible(documentId: string): Promise<{
         content: {},
       });
 
-    // 5. Prepare prompt for OpenAI
+    // 5. Prepare prompt for Claude
     const scriptText = document.extracted_text.slice(0, 30000); // Limit to ~30k chars
 
     const prompt = `You are a professional script analyst. Analyze this screenplay and create a comprehensive Character Bible.
@@ -132,26 +132,23 @@ CRITICAL: Return ONLY a valid JSON object with NO additional text, markdown form
   "generatedAt": "${new Date().toISOString()}"
 }`;
 
-    // 6. Call OpenAI API
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    // 6. Call Claude API
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4000,
+      system: 'You are a professional Hollywood script analyst specializing in character development. Always return valid JSON with no additional formatting.',
       messages: [
-        {
-          role: 'system',
-          content: 'You are a professional Hollywood script analyst specializing in character development. Always return valid JSON with no additional formatting.',
-        },
         {
           role: 'user',
           content: prompt,
         },
       ],
-      temperature: 0.7,
-      max_tokens: 4000,
     });
 
-    const rawContent = response.choices[0].message.content;
+    const textBlock = response.content.find(block => block.type === 'text');
+    const rawContent = textBlock && 'text' in textBlock ? textBlock.text : null;
     if (!rawContent) {
-      throw new Error('Empty response from OpenAI');
+      throw new Error('Empty response from Claude');
     }
 
     // 7. Parse response (handle potential markdown wrapping)
@@ -164,7 +161,7 @@ CRITICAL: Return ONLY a valid JSON object with NO additional text, markdown form
 
       characterBible = JSON.parse(cleanedContent);
     } catch {
-      console.error('Failed to parse OpenAI response:', rawContent);
+      console.error('Failed to parse Claude response:', rawContent);
       throw new Error('Invalid JSON response from AI');
     }
 
@@ -179,7 +176,7 @@ CRITICAL: Return ONLY a valid JSON object with NO additional text, markdown form
         content: characterBible,
         status: 'GENERATED',
         processing_time_ms: processingTime,
-        ai_model: 'gpt-4o-mini',
+        ai_model: 'claude-sonnet-4-20250514',
       }, {
         onConflict: 'document_id,output_type,version'
       });

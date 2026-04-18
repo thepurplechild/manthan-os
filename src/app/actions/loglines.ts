@@ -1,10 +1,10 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
 interface Logline {
@@ -151,26 +151,23 @@ Return ONLY valid JSON with NO markdown formatting:
   "generatedAt": "${new Date().toISOString()}"
 }`;
 
-    // 6. Call OpenAI
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    // 6. Call Claude
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1500,
+      system: 'You are an expert at writing compelling loglines for film and TV. You understand marketing, story hooks, and what makes audiences interested. Always return valid JSON with no additional formatting.',
       messages: [
-        {
-          role: 'system',
-          content: 'You are an expert at writing compelling loglines for film and TV. You understand marketing, story hooks, and what makes audiences interested. Always return valid JSON with no additional formatting.',
-        },
         {
           role: 'user',
           content: prompt,
         },
       ],
-      temperature: 0.8,
-      max_tokens: 1500,
     });
 
-    const rawContent = response.choices[0].message.content;
+    const textBlock = response.content.find(block => block.type === 'text');
+    const rawContent = textBlock && 'text' in textBlock ? textBlock.text : null;
     if (!rawContent) {
-      throw new Error('Empty response from OpenAI');
+      throw new Error('Empty response from Claude');
     }
 
     // 7. Parse response
@@ -209,7 +206,7 @@ Return ONLY valid JSON with NO markdown formatting:
         content: loglines,
         status: 'GENERATED',
         processing_time_ms: processingTime,
-        ai_model: 'gpt-4o-mini',
+        ai_model: 'claude-sonnet-4-20250514',
       }, {
         onConflict: 'document_id,output_type,version'
       });
